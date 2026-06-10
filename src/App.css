@@ -1,0 +1,108 @@
+/* ---------- Layout ---------- */
+.container {
+  width: min(1120px, 92%);
+  margin: 0 auto;
+}
+
+/* Offset so the sticky navbar doesn't cover section headings on scroll. */
+section[id] {
+  scroll-margin-top: 90px;
+}
+
+/* ---------- Scroll reveal ---------- */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.reveal--visible {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+.block {
+  padding: 5rem 0;
+}
+
+.section-head {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+.section-head h2 {
+  font-size: clamp(1.9rem, 4vw, 2.8rem);
+  font-weight: 800;
+  margin-bottom: 0.6rem;
+}
+.section-head p {
+  color: var(--charcoal-soft);
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-block;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  padding: 0.85rem 2rem;
+  border-radius: 999px;
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-primary {
+  background: var(--orange);
+  color: var(--white);
+  box-shadow: 0 10px 22px rgba(255, 107, 53, 0.32);
+}
+.btn-primary:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 30px rgba(255, 107, 53, 0.4);
+}
+.btn-dark {
+  background: var(--charcoal);
+  color: var(--yellow);
+  box-shadow: 0 10px 22px rgba(26, 26, 26, 0.22);
+}
+.btn-dark:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 30px rgba(26, 26, 26, 0.28);
+}
+.btn-ghost {
+  background: var(--white);
+  color: var(--charcoal);
+  border: 2px solid var(--charcoal);
+}
+.btn-ghost:hover {
+  transform: translateY(-3px);
+}
+
+/* ---------- Logo (shared by navbar + footer) ---------- */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.logo-mark {
+  width: 46px;
+  height: 46px;
+  background: var(--yellow);
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  font-size: 1.6rem;
+  box-shadow: var(--shadow-sm);
+}
+.logo-text {
+  font-family: "Baloo 2", sans-serif;
+  font-size: 1.6rem;
+  font-weight: 800;
+}

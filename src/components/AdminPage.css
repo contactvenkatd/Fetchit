@@ -1,0 +1,103 @@
+.admin {
+  min-height: 100vh;
+  background: var(--cream);
+  padding: 2.5rem 1.2rem 4rem;
+}
+.admin-inner {
+  width: min(900px, 100%);
+  margin: 0 auto;
+}
+.admin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.admin-tag {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  color: var(--charcoal-soft);
+  background: var(--yellow-soft);
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+}
+
+.admin-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.2rem;
+}
+.admin-count {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 1.2rem;
+}
+.admin-clear {
+  padding: 0.6rem 1.4rem;
+  font-size: 0.95rem;
+}
+.admin-clear:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.admin-empty {
+  background: var(--white);
+  border: 2px dashed #e6e1cf;
+  border-radius: var(--radius);
+  padding: 2.5rem;
+  text-align: center;
+  font-weight: 600;
+  color: var(--charcoal-soft);
+}
+
+.admin-table-wrap {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow-x: auto;
+}
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 520px;
+}
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 0.95rem 1.2rem;
+  font-weight: 600;
+}
+.admin-table thead th {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  background: var(--charcoal);
+  color: var(--yellow);
+}
+.admin-table thead th:first-child {
+  border-top-left-radius: var(--radius);
+}
+.admin-table thead th:last-child {
+  border-top-right-radius: var(--radius);
+}
+.admin-table tbody tr {
+  border-top: 1px solid #f0ecdd;
+}
+.admin-table tbody tr:nth-child(even) {
+  background: var(--cream);
+}
+.plan-pill {
+  display: inline-block;
+  background: var(--yellow);
+  color: var(--charcoal);
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+}

@@ -1,0 +1,138 @@
+/* ---------- Billing toggle ---------- */
+.billing-toggle {
+  display: inline-flex;
+  gap: 0.3rem;
+  margin: 0 auto 2.5rem;
+  padding: 0.35rem;
+  background: var(--yellow-soft);
+  border-radius: 999px;
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+}
+.billing-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: var(--charcoal-soft);
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.6rem 1.4rem;
+  border-radius: 999px;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.billing-option.active {
+  background: var(--charcoal);
+  color: var(--yellow);
+}
+.save-badge {
+  background: var(--orange);
+  color: var(--white);
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+.billing-option.active .save-badge {
+  background: var(--yellow);
+  color: var(--charcoal);
+}
+
+.pricing {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.6rem;
+  align-items: stretch;
+}
+.plan {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: 2.4rem 2rem;
+  box-shadow: var(--shadow-sm);
+  border: 2px solid var(--yellow-soft);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.18s ease;
+}
+.plan:hover {
+  transform: translateY(-6px);
+}
+.plan.featured {
+  background: var(--yellow);
+  border-color: var(--yellow-deep);
+  box-shadow: var(--shadow);
+  position: relative;
+}
+.plan-tag {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--orange);
+  color: var(--white);
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 0.8rem;
+  padding: 0.35rem 1rem;
+  border-radius: 999px;
+}
+.plan h3 {
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+.price {
+  font-family: "Baloo 2", sans-serif;
+  font-size: 2.8rem;
+  font-weight: 800;
+  margin: 0.6rem 0;
+}
+.price span {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--charcoal-soft);
+}
+.plan-billing-note {
+  min-height: 1.1rem;
+  margin-top: -0.4rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--orange);
+}
+.plan.featured .plan-billing-note {
+  color: var(--charcoal);
+}
+.plan-blurb {
+  color: var(--charcoal-soft);
+  font-weight: 600;
+}
+.plan ul {
+  list-style: none;
+  margin: 1.2rem 0 1.8rem;
+  display: grid;
+  gap: 0.7rem;
+  flex: 1;
+}
+.plan li {
+  font-weight: 600;
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+.plan li::before {
+  content: "🦴";
+  font-size: 0.9rem;
+}
+.plan .btn {
+  width: 100%;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .pricing {
+    grid-template-columns: 1fr;
+  }
+}

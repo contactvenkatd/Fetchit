@@ -1,0 +1,27 @@
+.proof-block {
+  background: var(--charcoal);
+  color: var(--white);
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  text-align: center;
+}
+.stat-num {
+  font-family: "Baloo 2", sans-serif;
+  font-size: clamp(2.2rem, 5vw, 3.4rem);
+  font-weight: 800;
+  color: var(--yellow);
+}
+.stat-label {
+  font-weight: 700;
+  font-size: 1.05rem;
+  opacity: 0.85;
+}
+
+@media (max-width: 720px) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+}

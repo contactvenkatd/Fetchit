@@ -1,0 +1,207 @@
+.auth-page {
+  min-height: 100vh;
+  background: var(--charcoal);
+  background-image: radial-gradient(
+    ellipse at top,
+    rgba(255, 210, 63, 0.12),
+    transparent 60%
+  );
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 3rem 1.2rem 4rem;
+}
+.auth-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  animation: route-fade 0.4s ease;
+}
+.auth-narrow {
+  max-width: 420px;
+}
+.auth-wide {
+  max-width: 1040px;
+}
+.auth-logo {
+  margin-bottom: 1.6rem;
+}
+.auth-logo .logo-text {
+  color: var(--white);
+}
+
+/* The white card used by signup / create-password */
+.auth-card {
+  width: 100%;
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  padding: 2.4rem 2rem;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.4);
+}
+.auth-card h1 {
+  font-size: 1.7rem;
+  font-weight: 800;
+  text-align: center;
+  margin-bottom: 0.4rem;
+}
+.auth-sub {
+  text-align: center;
+  color: var(--charcoal-soft);
+  font-weight: 600;
+  margin-bottom: 1.6rem;
+}
+
+/* Form primitives shared across auth pages */
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+}
+.auth-field label {
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+}
+.auth-input,
+.auth-field input {
+  font-family: "Nunito", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.8rem 1rem;
+  border: 2px solid #e6e1cf;
+  border-radius: 14px;
+  background: var(--cream);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  width: 100%;
+}
+.auth-field input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.18);
+}
+.auth-input[aria-invalid="true"],
+.auth-field input[aria-invalid="true"] {
+  border-color: var(--orange);
+}
+.auth-input:disabled {
+  color: var(--charcoal-soft);
+  background: #f0ecdf;
+  cursor: not-allowed;
+}
+.auth-btn {
+  width: 100%;
+  margin-top: 0.4rem;
+}
+.field-error {
+  color: var(--orange);
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin-top: 0.45rem;
+}
+
+/* Google sign-in button */
+.google-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  background: #ffffff;
+  color: #3c4043;
+  border: 1.5px solid #dadce0;
+  border-radius: 14px;
+  padding: 0.8rem 1rem;
+  font-family: "Roboto", "Nunito", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.google-btn:hover {
+  background: #f8f9fa;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.2);
+}
+
+/* Password input + show/hide toggle */
+.pw-wrap {
+  position: relative;
+}
+.pw-wrap input {
+  width: 100%;
+  padding-right: 4rem;
+}
+.pw-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--orange);
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 8px;
+}
+.pw-toggle:hover {
+  background: var(--yellow-soft);
+}
+
+/* Divider with centered label */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  margin: 1.3rem 0;
+  color: var(--charcoal-soft);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: #e6e1cf;
+}
+
+.auth-footer {
+  margin-top: 1.4rem;
+  text-align: center;
+  font-weight: 600;
+  color: var(--charcoal-soft);
+}
+.auth-footer a {
+  color: var(--orange);
+  font-weight: 800;
+}
+.auth-legal {
+  margin-top: 1.6rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+}
+.auth-legal a {
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: underline;
+}
+
+@keyframes route-fade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-wrap {
+    animation: none;
+  }
+}

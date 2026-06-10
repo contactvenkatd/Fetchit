@@ -1,0 +1,88 @@
+.checkout-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--yellow-soft);
+  border: 2px solid var(--yellow);
+  border-radius: 999px;
+  padding: 0.7rem 1.3rem;
+  margin: 1rem 0 1.6rem;
+}
+.cs-plan {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+}
+.cs-price {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--charcoal);
+}
+
+.checkout-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+
+.stripe-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin: 0.4rem 0 1.2rem;
+  color: var(--charcoal-soft);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.stripe-lock {
+  font-size: 0.9rem;
+}
+
+/* ---------- Success state ---------- */
+.checkout-success {
+  text-align: center;
+  outline: none;
+}
+.success-check {
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 1.2rem;
+}
+.success-check svg {
+  width: 100%;
+  height: 100%;
+}
+.sc-circle {
+  fill: none;
+  stroke: #2bb673;
+  stroke-width: 3;
+  stroke-dasharray: 151;
+  stroke-dashoffset: 151;
+  animation: sc-draw 0.5s ease forwards;
+}
+.sc-tick {
+  fill: none;
+  stroke: #2bb673;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: sc-draw 0.4s 0.45s ease forwards;
+}
+@keyframes sc-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-circle,
+  .sc-tick {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+}
