@@ -57,9 +57,38 @@ create policy "Users can manage their own orders"
   with check (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------------
+-- sessions — usage windows for the token/rate limit. One row per 5-hour window;
+-- `tokens_used` accumulates the (estimated) tokens spent in that window. The
+-- app finds the active window by reading the newest row and checking whether
+-- session_start is within the last 5 hours (the reset cadence). Token limits and
+-- the 5h window live in the app (src/utils.js) — internal, never shown to users.
+-- ---------------------------------------------------------------------------
+create table if not exists public.sessions (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users (id) on delete cascade default auth.uid(),
+  plan          text not null default 'Free',
+  tokens_used   bigint not null default 0,
+  session_start timestamptz not null default now(),
+  created_at    timestamptz not null default now()
+);
+
+create index if not exists sessions_user_id_start_idx
+  on public.sessions (user_id, session_start desc);
+
+alter table public.sessions enable row level security;
+
+drop policy if exists "Users can manage their own sessions" on public.sessions;
+create policy "Users can manage their own sessions"
+  on public.sessions
+  for all
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
 -- delete_user() — lets a signed-in user delete their own account from the
--- client. Removing the auth.users row cascades to their chats and orders (both
--- reference auth.users on delete cascade). SECURITY DEFINER so it runs with the
+-- client. Removing the auth.users row cascades to their chats, orders, and
+-- sessions (all reference auth.users on delete cascade). SECURITY DEFINER so it runs with the
 -- owner's privileges; it only ever targets auth.uid(), so a user can only
 -- delete themselves. Called from the app via supabase.rpc('delete_user').
 -- ---------------------------------------------------------------------------

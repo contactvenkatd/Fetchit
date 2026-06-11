@@ -1,16 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import AuthLayout from "./AuthLayout";
+import { supabase } from "../supabaseClient";
 import {
   signIn,
   sendPasswordReset,
   isValidEmail,
+  getSession,
   getPendingPlan,
   clearPendingPlan,
   finalizePlan,
+  hasPlan,
+  sendLoginOtp,
+  verifyLoginOtp,
 } from "../utils";
 import "./LoginPage.css";
 
+// Email second factor via real OTP: verify the password, sign out immediately
+// (no session yet), email an 8-digit code (sendLoginOtp), and require the user to
+// enter it (verifyLoginOtp → type 'email'). Wrong codes are rejected by Supabase;
+// a correct code establishes the session. A `fetchit_login_pending` flag holds
+// RedirectIfAuthed during the brief windows where a session exists (the password
+// step and after verification) so /login doesn't bounce to /chat early.
 function LoginPage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState("login"); // "login" | "reset"
@@ -19,6 +30,14 @@ function LoginPage() {
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Email-confirmation (reauthentication code) sub-state, after a valid password.
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpEmail, setOtpEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [otpResending, setOtpResending] = useState(false);
+  const [otpResent, setOtpResent] = useState(false);
 
   // Forgot-password (reset) sub-state.
   const [resetEmail, setResetEmail] = useState("");
@@ -35,10 +54,15 @@ function LoginPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError("");
     setSubmitting(true);
+    // signInWithPassword creates a session transiently; hold the /login auto-
+    // redirect while we verify the password and sign back out.
+    sessionStorage.setItem("fetchit_login_pending", "1");
     const { error: authError } = await signIn(email, password);
-    setSubmitting(false);
     if (authError) {
+      sessionStorage.removeItem("fetchit_login_pending");
+      setSubmitting(false);
       setError(
         /confirm/i.test(authError.message)
           ? "Please verify your email before signing in"
@@ -47,19 +71,84 @@ function LoginPage() {
       return;
     }
 
-    // Resume a plan the user picked before logging in, if any.
+    // Password is valid → sign back out (they're not in until the OTP checks
+    // out), then email a real 8-digit code.
+    await supabase.auth.signOut({ scope: "local" });
+    const { error: otpError } = await sendLoginOtp(email);
+    sessionStorage.removeItem("fetchit_login_pending"); // no session during entry
+    setSubmitting(false);
+    if (otpError) {
+      setError(otpError.message || "Couldn't send the confirmation code.");
+      return;
+    }
+    setOtpEmail(email.trim());
+    setCode("");
+    setOtpSent(true);
+  };
+
+  // Finish a verified login: route by pending plan / plan status. Keeps the
+  // redirect flag set across awaits (a session now exists) and clears it only in
+  // the synchronous step immediately before each navigate.
+  const finishLogin = async (verifiedSession) => {
+    const session = verifiedSession || (await getSession());
     const pending = getPendingPlan();
     if (pending) {
       clearPendingPlan();
       if (pending.name === "Free") {
         await finalizePlan("Free");
-        navigate("/chat");
+        sessionStorage.removeItem("fetchit_login_pending");
+        navigate("/onboarding");
       } else {
+        sessionStorage.removeItem("fetchit_login_pending");
         navigate("/checkout", { state: { plan: pending } });
       }
       return;
     }
-    navigate("/chat");
+    sessionStorage.removeItem("fetchit_login_pending");
+    navigate(session && !hasPlan(session) ? "/plans" : "/chat");
+  };
+
+  // Enter the emailed 8-digit code → real verification via verifyOtp.
+  const handleVerifyCode = async (e) => {
+    e.preventDefault();
+    setError("");
+    if (!/^\d{8}$/.test(code.trim())) {
+      setError("Enter the 8-digit code from your email.");
+      return;
+    }
+    setVerifying(true);
+    // A correct code establishes a session — hold the redirect until we route.
+    sessionStorage.setItem("fetchit_login_pending", "1");
+    const { data, error: verifyError } = await verifyLoginOtp(otpEmail, code);
+    setVerifying(false);
+    if (verifyError) {
+      sessionStorage.removeItem("fetchit_login_pending");
+      setError("That code didn't work — check your email and try again.");
+      return;
+    }
+    await finishLogin(data && data.session);
+  };
+
+  const handleResendCode = async () => {
+    setError("");
+    setOtpResent(false);
+    setOtpResending(true);
+    const { error: otpError } = await sendLoginOtp(otpEmail || email);
+    setOtpResending(false);
+    if (otpError) {
+      setError(otpError.message || "Couldn't resend the code.");
+      return;
+    }
+    setOtpResent(true);
+  };
+
+  // "Back to sign in" — no session exists during code entry, just reset the UI.
+  const handleCancelCode = () => {
+    sessionStorage.removeItem("fetchit_login_pending");
+    setOtpSent(false);
+    setOtpResent(false);
+    setCode("");
+    setError("");
   };
 
   const openReset = () => {
@@ -91,6 +180,73 @@ function LoginPage() {
     }
     setResetSent(true);
   };
+
+  if (otpSent) {
+    return (
+      <AuthLayout>
+        <div className="auth-card">
+          <h1>Check your email 🐕</h1>
+          <p className="auth-sub">
+            We sent an 8-digit confirmation code to <strong>{otpEmail}</strong>.
+            Enter it below to finish signing in.
+          </p>
+          <form onSubmit={handleVerifyCode} noValidate>
+            <div className="auth-field">
+              <label htmlFor="li-code">Confirmation code</label>
+              <input
+                id="li-code"
+                className="login-code-input"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="12345678"
+                maxLength={8}
+                value={code}
+                onChange={(e) => {
+                  setCode(e.target.value.replace(/\D/g, "").slice(0, 8));
+                  if (error) setError("");
+                }}
+                aria-invalid={!!error}
+                aria-describedby={error ? "li-code-err" : undefined}
+              />
+            </div>
+            {otpResent && (
+              <p className="login-otp-note" role="status">
+                Code resent 🐕
+              </p>
+            )}
+            {error && (
+              <p className="field-error" id="li-code-err" role="alert">
+                {error}
+              </p>
+            )}
+            <button
+              type="submit"
+              className="btn btn-primary auth-btn"
+              disabled={verifying}
+            >
+              {verifying ? "Confirming…" : "Confirm & sign in"}
+            </button>
+          </form>
+          <button
+            type="button"
+            className="login-resend-link"
+            onClick={handleResendCode}
+            disabled={otpResending}
+          >
+            {otpResending ? "Sending…" : "Resend code"}
+          </button>
+          <button
+            type="button"
+            className="reset-back-link"
+            onClick={handleCancelCode}
+          >
+            Back to sign in
+          </button>
+        </div>
+      </AuthLayout>
+    );
+  }
 
   if (mode === "reset") {
     return (

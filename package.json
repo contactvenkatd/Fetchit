@@ -4,6 +4,8 @@
   "private": true,
   "description": "Fetchit — your friendly AI shopping assistant landing page",
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.6.0",
+    "@stripe/stripe-js": "^9.8.0",
     "@supabase/supabase-js": "^2.108.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -32,5 +34,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "supabase": "^2.106.0"
   }
 }

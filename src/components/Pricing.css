@@ -48,6 +48,15 @@
   gap: 1.6rem;
   align-items: stretch;
 }
+/* Four-tier layout (Free / Plus / Pro / Max). Tighter than the 3-up grid so
+   all four cards fit comfortably. */
+.pricing-4 {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.1rem;
+}
+.pricing-4 .plan {
+  padding: 2rem 1.4rem;
+}
 .plan {
   background: var(--white);
   border-radius: var(--radius-lg);
@@ -66,6 +75,17 @@
   border-color: var(--yellow-deep);
   box-shadow: var(--shadow);
   position: relative;
+}
+/* Max — "Best Value": white card with a bold orange frame (distinct from the
+   yellow "Most Popular" Pro card). */
+.plan.best {
+  border-color: var(--orange);
+  box-shadow: 0 14px 34px rgba(255, 107, 35, 0.18);
+  position: relative;
+}
+.plan-tag.plan-tag-best {
+  background: var(--charcoal);
+  color: var(--yellow);
 }
 .plan-tag {
   position: absolute;
@@ -133,6 +153,18 @@
 
 @media (max-width: 720px) {
   .pricing {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Four-up grid collapses in two steps: 4 → 2 → 1. */
+@media (max-width: 1000px) {
+  .pricing-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 560px) {
+  .pricing-4 {
     grid-template-columns: 1fr;
   }
 }

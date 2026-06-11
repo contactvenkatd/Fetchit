@@ -51,6 +51,77 @@
   width: 100%;
 }
 
+/* No-refund / billing policy under each paid plan button. */
+.plan-policy {
+  margin: 0.7rem 0 0;
+  text-align: center;
+  color: var(--charcoal-soft);
+  font-weight: 600;
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+/* ---------- Downgrade-to-Free confirmation modal (reuses Modal.css base) ---------- */
+.downgrade-modal {
+  border-top: 6px solid #e5484d;
+  text-align: center;
+}
+.downgrade-modal h2 {
+  font-size: 1.4rem;
+  font-weight: 800;
+  margin-bottom: 0.5rem;
+}
+.downgrade-modal .modal-sub {
+  text-align: center;
+}
+.downgrade-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-top: 1.2rem;
+}
+.downgrade-actions .btn {
+  width: 100%;
+}
+/* "Cancel" keeps the current plan — yellow. */
+.dg-keep-btn {
+  background: var(--yellow);
+  color: var(--charcoal);
+}
+.dg-keep-btn:hover:not(:disabled) {
+  background: var(--yellow-deep, #f5c400);
+}
+/* "Downgrade to Free" is destructive — red outlined. */
+.dg-confirm-btn {
+  background: transparent;
+  color: #e5484d;
+  border: 2px solid #e5484d;
+}
+.dg-confirm-btn:hover:not(:disabled) {
+  background: rgba(229, 72, 77, 0.1);
+}
+.dg-keep-btn:disabled,
+.dg-confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---------- Current-plan state ---------- */
+.plan.is-current {
+  outline: 2px solid #4caf7d;
+  outline-offset: 3px;
+}
+.plan-tag.plan-tag-current {
+  background: #4caf7d;
+  color: var(--white);
+}
+/* Disabled "Current Plan" button. */
+.plan .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
 @media (max-width: 720px) {
   .auth-wide .pricing {
     grid-template-columns: 1fr;

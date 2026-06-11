@@ -1,47 +1,40 @@
 /* Onboarding name-collection card — reuses .auth-card / .auth-field styles. */
-.onb-row {
+.onboarding-card {
+  text-align: center;
+}
+.onboarding-card form {
+  text-align: left;
+  margin-top: 0.4rem;
+}
+
+/* First / last name side by side (stack on narrow screens). */
+.onboarding-row {
   display: flex;
   gap: 1rem;
 }
-.onb-row .auth-field {
+.onboarding-row .auth-field {
   flex: 1;
 }
 
-/* Yellow primary action ("Let's Go!"). */
-.onb-btn {
-  width: 100%;
-  margin-top: 0.4rem;
-  background: var(--yellow);
-  color: var(--charcoal);
-  box-shadow: 0 10px 22px rgba(245, 196, 0, 0.32);
-}
-.onb-btn:hover:not(:disabled) {
-  transform: translateY(-3px);
-  box-shadow: 0 16px 30px rgba(245, 196, 0, 0.4);
-}
-.onb-btn:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.onb-skip {
+/* Subtle "Skip for now" link below the button. */
+.onboarding-skip {
   display: block;
-  margin: 1.1rem auto 0;
+  margin: 1rem auto 0;
   background: none;
   border: none;
+  padding: 0.3rem;
+  cursor: pointer;
   color: var(--charcoal-soft);
   font-family: "Nunito", sans-serif;
   font-weight: 700;
-  font-size: 0.95rem;
-  text-decoration: underline;
-  cursor: pointer;
+  font-size: 0.9rem;
 }
-.onb-skip:hover {
+.onboarding-skip:hover {
   color: var(--charcoal);
 }
 
 @media (max-width: 480px) {
-  .onb-row {
+  .onboarding-row {
     flex-direction: column;
     gap: 0;
   }

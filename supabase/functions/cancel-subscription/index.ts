@@ -1,0 +1,106 @@
+// Supabase Edge Function: cancel-subscription
+// ---------------------------------------------------------------------------
+// Runs server-side (Deno) where the Stripe SECRET key is safe. Cancels the
+// caller's active Stripe subscription(s) at period end — they keep access until
+// the current period closes (no immediate cutoff, no refund). The client then
+// downgrades the user's plan metadata to Free (see utils.js cancelSubscription).
+//
+// Deploy:   supabase functions deploy cancel-subscription
+// Secret:   reuses STRIPE_SECRET_KEY (already set for create-subscription)
+// (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are injected automatically.)
+//
+// Test mode only — use a test secret key (sk_test_...).
+
+import Stripe from "npm:stripe@^17";
+import { createClient } from "npm:@supabase/supabase-js@^2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+
+Deno.serve(async (req) => {
+  // CORS preflight.
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!stripeKey) return json({ error: "Stripe is not configured." }, 500);
+    const stripe = new Stripe(stripeKey);
+
+    // ----- Authenticate the caller from their JWT -----
+    const authHeader = req.headers.get("Authorization") || "";
+    const token = authHeader.replace(/^Bearer\s+/i, "");
+    if (!token) return json({ error: "Not authenticated." }, 401);
+
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { data: userData, error: userErr } = await admin.auth.getUser(token);
+    if (userErr || !userData?.user) {
+      return json({ error: "Not authenticated." }, 401);
+    }
+    const user = userData.user;
+
+    // Body options:
+    //   atPeriodEnd          — true (default): set cancel_at_period_end so the
+    //                          user keeps access until the period ends (the
+    //                          cancel-to-Free flow + downgrades). false: cancel
+    //                          immediately (upgrade / billing switch).
+    //   exceptSubscriptionId — a subscription to leave untouched (the brand-new
+    //                          one created during a plan change).
+    const { atPeriodEnd = true, exceptSubscriptionId = null } =
+      (await req.json().catch(() => ({}))) as {
+        atPeriodEnd?: boolean;
+        exceptSubscriptionId?: string | null;
+      };
+
+    const customerId = (user.user_metadata as Record<string, unknown> | null)
+      ?.stripe_customer_id as string | undefined;
+    // No Stripe customer → nothing to cancel; let the client proceed anyway.
+    if (!customerId) return json({ ok: true, canceled: 0 });
+
+    const subs = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 100,
+    });
+    const billing = new Set(["active", "trialing", "past_due", "unpaid"]);
+    let canceled = 0;
+    let periodEnd: number | null = null;
+    for (const sub of subs.data) {
+      if (!billing.has(sub.status)) continue;
+      if (exceptSubscriptionId && sub.id === exceptSubscriptionId) continue; // keep the new one
+      if (atPeriodEnd) {
+        // Already scheduled → just surface its period end, don't re-update.
+        if (sub.cancel_at_period_end) {
+          periodEnd = sub.current_period_end ?? periodEnd;
+          continue;
+        }
+        const updated = await stripe.subscriptions.update(sub.id, {
+          cancel_at_period_end: true,
+        });
+        periodEnd = updated.current_period_end ?? periodEnd;
+      } else {
+        await stripe.subscriptions.cancel(sub.id); // immediate
+      }
+      canceled += 1;
+    }
+
+    return json({ ok: true, canceled, periodEnd });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Cancellation failed.";
+    return json({ error: message }, 500);
+  }
+});

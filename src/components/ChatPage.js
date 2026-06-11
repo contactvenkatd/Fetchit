@@ -10,6 +10,14 @@ import {
   saveChat,
   deleteChat,
   saveOrder,
+  getPlan,
+  tokenLimit,
+  estimateTokens,
+  formatResetIn,
+  getOrCreateSession,
+  isSessionExpired,
+  addSessionTokens,
+  NEXT_PLAN,
 } from "../utils";
 import "./ChatMockup.css"; // reuse bubble / typing / progress / product-scroll styles
 import "./ChatPage.css";
@@ -55,7 +63,28 @@ const makeId = () =>
     : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const truncate = (s, n) => (s.length > n ? `${s.slice(0, n)}…` : s);
 
-function Message({ m, onBuy }) {
+function Message({ m, onBuy, onUpgrade }) {
+  if (m.type === "limit") {
+    return (
+      <div className="msg msg-fetchit">
+        <div className="avatar" aria-hidden="true">🐕</div>
+        <div className="bubble bubble-limit" role="status">
+          <p className="limit-title">You&apos;ve reached your session limit 🐕</p>
+          <p>Your session resets in {m.resetText}.</p>
+          {m.next && (
+            <>
+              <p>
+                Upgrade to {m.next.plan} for {m.next.multiplier} more usage.
+              </p>
+              <button type="button" className="limit-upgrade" onClick={onUpgrade}>
+                Upgrade to {m.next.plan} →
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
   if (m.type === "products") {
     return (
       <div className="msg msg-fetchit msg-products">
@@ -120,6 +149,7 @@ function ChatPage() {
   const chatRef = useRef(null);
   const menuRef = useRef(null);
   const currentChatRef = useRef(null); // { id, title, createdAt }
+  const sessionRef = useRef(null); // active usage window { id, tokensUsed, sessionStart }
 
   // Protected route: must be logged in (once the session check resolves).
   useEffect(() => {
@@ -142,6 +172,19 @@ function ChatPage() {
     const timers = timersRef.current;
     return () => timers.forEach(clearTimeout);
   }, []);
+
+  // Prime the user's usage window (token limit tracking — invisible to the user).
+  // Skipped in incognito so nothing is written to Supabase.
+  useEffect(() => {
+    if (!email || incognito) return undefined;
+    let active = true;
+    getOrCreateSession(getPlan(session)).then((s) => {
+      if (active) sessionRef.current = s;
+    });
+    return () => {
+      active = false;
+    };
+  }, [email, incognito, session]);
 
   // Close the account dropdown on outside click.
   useEffect(() => {
@@ -208,11 +251,61 @@ function ChatPage() {
     }, reduced ? 0 : 4000);
   };
 
-  const handleSubmit = (text) => {
+  // Token/usage gate. Estimates the cost of this exchange, blocks if the window
+  // is exhausted, otherwise records the tokens. Returns { allowed, sess }.
+  // Fails open on a DB error (e.g. the sessions table isn't migrated yet) so
+  // chat still works. All of this is invisible to the user.
+  const consumeOrBlock = async (text) => {
+    // getPlan() returns the real paid plan during a scheduled cancellation
+    // (until plan_cancels_at), so a canceled-but-active user keeps their higher
+    // token limit until the period actually ends.
+    const plan = getPlan(session);
+    const limit = tokenLimit(plan);
+    let sess = sessionRef.current;
+    if (!sess || isSessionExpired(sess)) {
+      sess = await getOrCreateSession(plan);
+      sessionRef.current = sess;
+    }
+    if (!sess) return { allowed: true }; // no tracking available → don't block
+    if (sess.tokensUsed >= limit) return { allowed: false, sess };
+
+    const products = pickProducts(text);
+    const cost =
+      estimateTokens(text) +
+      estimateTokens("Got it! Let me find the best options for you... 🔍") +
+      products.reduce((s, p) => s + estimateTokens(`${p.name} ${p.desc}`), 0);
+    const total = await addSessionTokens(sess.id, sess.tokensUsed, cost);
+    sessionRef.current = { ...sess, tokensUsed: total };
+    return { allowed: true };
+  };
+
+  const showLimitMessage = (sess) => {
+    const next = NEXT_PLAN[getPlan(session)];
+    const resetText = formatResetIn(sess.sessionStart).text;
+    const pushLimit = () =>
+      add({ sender: "fetchit", type: "limit", resetText, next });
+    if (phase !== "chatting") {
+      setPhase("chatting");
+      schedule(pushLimit, prefersReduced() ? 0 : 50);
+    } else {
+      pushLimit();
+    }
+  };
+
+  const handleSubmit = async (text) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     setInput("");
     setSidebarOpen(false);
+
+    // Usage gate (skipped in incognito — incognito writes nothing to Supabase).
+    if (!incognito) {
+      const gate = await consumeOrBlock(trimmed);
+      if (!gate.allowed) {
+        showLimitMessage(gate.sess);
+        return;
+      }
+    }
 
     // Start a new persisted chat on the first message (normal mode only).
     if (!incognito && !currentChatRef.current) {
@@ -236,6 +329,8 @@ function ChatPage() {
       runConversation(trimmed);
     }, reduced ? 0 : 300);
   };
+
+  const handleUpgrade = () => navigate("/plans");
 
   const handleBuy = (product) => {
     if (buyingRef.current) return;
@@ -393,7 +488,12 @@ function ChatPage() {
           ) : (
             <div className="chat-thread" ref={chatRef}>
               {messages.map((m) => (
-                <Message key={m.id} m={m} onBuy={handleBuy} />
+                <Message
+                  key={m.id}
+                  m={m}
+                  onBuy={handleBuy}
+                  onUpgrade={handleUpgrade}
+                />
               ))}
             </div>
           )}

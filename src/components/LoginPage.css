@@ -67,6 +67,50 @@
   color: var(--charcoal);
 }
 
+/* 8-digit OTP entry — roomy, centered, evenly spaced digits. */
+.login-code-input {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.5em;
+  /* trailing letter-spacing pushes content left; nudge it back to look centered */
+  text-indent: 0.5em;
+  font-size: 1.25rem;
+  font-weight: 800;
+}
+.login-code-input::placeholder {
+  letter-spacing: 0.35em;
+  font-weight: 600;
+}
+
+/* "Code resent 🐕" confirmation on the login check-email screen. */
+.login-otp-note {
+  text-align: center;
+  color: #2bb673;
+  font-weight: 800;
+  font-size: 0.9rem;
+  margin-bottom: 0.6rem;
+}
+
+/* Secondary "Resend code" action on the code-entry screen. */
+.login-resend-link {
+  display: block;
+  margin: 0.9rem auto 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--orange);
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+.login-resend-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.login-resend-link:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .login-yellow-btn:hover:not(:disabled) {
     transform: none;

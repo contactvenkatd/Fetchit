@@ -46,6 +46,76 @@
   gap: 0.9rem;
 }
 
+/* Billing toggle, sized down to sit neatly inside the narrow checkout card
+   (overrides the wide-page spacing from Pricing.css). */
+.co-billing {
+  margin: 0.2rem auto 1.2rem;
+}
+.co-billing .billing-option {
+  font-size: 0.9rem;
+  padding: 0.45rem 1rem;
+}
+.co-billing-note {
+  text-align: center;
+  margin: -1rem 0 1.4rem;
+  color: var(--charcoal-soft);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+/* Stripe Elements iframes, styled to match the app's text inputs. The iframe
+   itself renders the card text; this wrapper provides the border/padding and
+   reflects Stripe's focus / invalid state classes. */
+.stripe-input {
+  border: 2px solid #e6e1cf;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  background: var(--cream);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.stripe-input.StripeElement--focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.18);
+}
+.stripe-input.StripeElement--invalid {
+  border-color: #d32f2f;
+}
+
+.checkout-error {
+  text-align: center;
+  margin: 0.2rem 0 0.6rem;
+}
+
+.stripe-test-hint {
+  text-align: center;
+  margin: -0.4rem 0 1.1rem;
+  color: var(--charcoal-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.stripe-test-hint code {
+  font-family: "Nunito", monospace;
+  background: var(--yellow-soft);
+  padding: 0.05rem 0.35rem;
+  border-radius: 6px;
+  font-weight: 800;
+}
+
+.auth-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* No-refund / billing policy under the submit button. */
+.checkout-policy {
+  margin: 0.9rem 0 0;
+  color: var(--charcoal-soft);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .stripe-note {
   display: flex;
   align-items: center;

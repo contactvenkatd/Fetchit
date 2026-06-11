@@ -5,6 +5,7 @@ import {
   Route,
   Navigate,
   useNavigate,
+  useLocation,
 } from "react-router-dom";
 import "./App.css";
 import Navbar from "./components/Navbar";
@@ -29,7 +30,7 @@ import ResetPasswordPage from "./components/ResetPasswordPage";
 import ChatPage from "./components/ChatPage";
 import AccountPage from "./components/AccountPage";
 import { AuthProvider, useAuth } from "./AuthContext";
-import { saveSignup, setPendingPlan, finalizePlan } from "./utils";
+import { saveSignup, setPendingPlan, finalizePlan, hasPlan } from "./utils";
 
 const TOAST_MESSAGE = "Fetchit is on it! We'll be in touch soon.";
 
@@ -54,18 +55,14 @@ const URL_RETURN = (() => {
 })();
 
 // Handle Supabase redirects back from a confirmation link, then clean the URL:
-// - ?type=deletion → start the in-app account-deletion confirmation flow
 // - type=recovery / email_change → finish the in-app password change
 // The forgot-password reset link also uses type=recovery but lands on
 // /reset-password, which owns its flow — leave it alone.
+// (Account deletion no longer routes through here: its email is a plain
+// /account?type=deletion&token=… link that AccountPage verifies on arrival.)
 function RecoveryHandler() {
   const navigate = useNavigate();
   useEffect(() => {
-    if (URL_RETURN.delete) {
-      sessionStorage.setItem("fetchit_delete_intent", "1");
-      navigate("/account", { replace: true });
-      return;
-    }
     if (URL_RETURN.path === "/reset-password") return;
     if (URL_RETURN.authType === "recovery" || URL_RETURN.authType === "email_change") {
       sessionStorage.setItem("fetchit_pw_recovery", "1");
@@ -205,7 +202,28 @@ function RedirectIfAuthed({ children }) {
   // down. Don't bounce to /chat on a momentarily-stale session — render the
   // landing page so the flow ends cleanly (no logged-in/out flicker).
   const deletionPending = sessionStorage.getItem("fetchit_flash");
-  if (session && !deletionPending) return <Navigate to="/chat" replace />;
+  // While a login is mid-email-confirmation, the password sign-in transiently
+  // creates a session before we drop it — don't bounce to /chat in that window.
+  const loginPending = sessionStorage.getItem("fetchit_login_pending");
+  if (session && !deletionPending && !loginPending) {
+    return <Navigate to="/chat" replace />;
+  }
+  return children;
+}
+
+// Gate for /plans:
+//   - not logged in            → /login
+//   - logged in, no plan yet   → show /plans (the post-verification step)
+//   - logged in, already has a plan → /chat …unless this is an intentional plan
+//     change (navigated with state.manage, e.g. /account's "Upgrade/Manage Plan"),
+//     which is allowed through so the upgrade/downgrade UI stays reachable.
+function PlansGate({ children }) {
+  const { session, loading } = useAuth();
+  const location = useLocation();
+  if (loading) return null;
+  if (!session) return <Navigate to="/login" replace />;
+  const manage = location.state && location.state.manage;
+  if (hasPlan(session) && !manage) return <Navigate to="/chat" replace />;
   return children;
 }
 
@@ -239,7 +257,14 @@ function App() {
             </RedirectIfAuthed>
           }
         />
-        <Route path="/plans" element={<PlansPage />} />
+        <Route
+          path="/plans"
+          element={
+            <PlansGate>
+              <PlansPage />
+            </PlansGate>
+          }
+        />
         <Route path="/checkout" element={<CheckoutPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />

@@ -11,9 +11,28 @@ import {
   verifyPassword,
   sendAccountDeletionEmail,
   deleteAccount,
+  verifyDeleteToken,
+  clearDeleteToken,
+  getPlan,
+  getPlanBilling,
+  planUsageLabel,
+  nextBillingDate,
+  cancelSubscription,
+  reactivateSubscription,
+  isCanceled,
+  planCancelsAt,
 } from "../utils";
+import { monthlyDisplay, money } from "../stripeClient";
 import "./Modal.css"; // reuse .modal / .modal-overlay / .modal-cancel styles
 import "./AccountPage.css";
+
+// "July 11, 2026"
+const formatDate = (d) =>
+  d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
 // Coarse password strength → a 0–4 score plus a label/class for the meter.
 function passwordStrength(pw) {
@@ -86,11 +105,18 @@ function AccountPage() {
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
 
+  // Subscription cancellation (paid plans only).
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
+
   const [toast, setToast] = useState({ visible: false, message: "" });
   const toastTimer = useRef(null);
   // Set once the account is deleted, so the "not signed in → /login" guard below
   // doesn't fire and fight the single navigate("/") after deletion.
   const deletedRef = useRef(false);
+  // Ensures the deletion-link token is verified at most once.
+  const deletionLinkRef = useRef(false);
 
   const showToast = useCallback((message) => {
     setToast({ visible: true, message });
@@ -127,21 +153,71 @@ function AccountPage() {
     }
   }, []);
 
-  // Did we arrive via the account-deletion confirmation link? Open the warning
-  // modal. (Flag set in App.js after detecting ?type=deletion.)
+  // Did we arrive via the account-deletion confirmation link
+  // (/account?type=deletion&token=…)? Verify the token against our metadata
+  // before opening the warning modal. Session-aware so it waits for the user to
+  // resolve; runs at most once.
   useEffect(() => {
-    if (sessionStorage.getItem("fetchit_delete_intent") === "1") {
-      sessionStorage.removeItem("fetchit_delete_intent");
-      setDeleteStep("warn");
+    if (deletionLinkRef.current || loading || !session) return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("type") !== "deletion") return;
+    deletionLinkRef.current = true;
+    const token = params.get("token");
+    // Don't leave the token sitting in the URL / browser history.
+    window.history.replaceState({}, "", "/account");
+    if (verifyDeleteToken(session, token)) {
+      clearDeleteToken(); // one-time use
       setDelEmailSent(false);
+      setDeleteStep("warn");
+    } else {
+      showToast("This deletion link has expired or is invalid.");
     }
-  }, []);
+  }, [loading, session, showToast]);
 
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   if (loading || !session) return null;
 
   const email = session.user.email;
+
+  // ----- Current plan (for the "Your Plan" card) -----
+  const plan = getPlan(session); // Free | Plus | Pro | Max (honors grace period)
+  const isPaid = plan !== "Free";
+  const planBilling = getPlanBilling(session);
+  const priceText =
+    plan === "Free" ? "$0/mo" : `$${money(monthlyDisplay(plan, planBilling))}/mo`;
+  const usageLabel = planUsageLabel(plan);
+  const nextBill = nextBillingDate(session);
+  const nextBillText = nextBill ? formatDate(nextBill) : null;
+  // Scheduled cancellation: still on the paid plan, but it ends on this date.
+  const canceled = isCanceled(session);
+  const cancelDate = planCancelsAt(session);
+  const cancelDateText = cancelDate ? formatDate(cancelDate) : null;
+
+  const handleCancelSub = async () => {
+    setCanceling(true);
+    const { error } = await cancelSubscription();
+    setCanceling(false);
+    if (error) {
+      showToast(error.message || "Couldn't cancel — please try again.");
+      return;
+    }
+    setCancelOpen(false);
+    // Plan stays active until the period ends; the card now shows "Cancels on…"
+    // once the session metadata refreshes (USER_UPDATED → AuthContext).
+    showToast("Subscription canceled — you keep access until your period ends 🐕");
+  };
+
+  const handleReactivate = async () => {
+    setReactivating(true);
+    const { error } = await reactivateSubscription();
+    setReactivating(false);
+    if (error) {
+      showToast(error.message || "Couldn't reactivate — please try again.");
+      return;
+    }
+    showToast("Subscription reactivated 🐕");
+  };
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
@@ -309,6 +385,82 @@ function AccountPage() {
 
       <main className="account-main">
         <div className="account-card">
+          {/* ---------- Your Plan ---------- */}
+          <section className="account-section">
+            <h2>Your Plan</h2>
+            <div className={`plan-card plan-card-${plan.toLowerCase()}`}>
+              <div className="plan-card-head">
+                <span className="plan-card-name">{plan}</span>
+                {canceled && cancelDateText ? (
+                  <span className="plan-card-badge canceled">
+                    Cancels on {cancelDateText}
+                  </span>
+                ) : (
+                  <>
+                    {plan === "Pro" && (
+                      <span className="plan-card-badge">Most Popular</span>
+                    )}
+                    {plan === "Max" && (
+                      <span className="plan-card-badge best">Best Value</span>
+                    )}
+                  </>
+                )}
+              </div>
+              <div className="plan-card-price">{priceText}</div>
+              <ul className="plan-card-meta">
+                <li>{usageLabel}</li>
+                <li>Sessions reset every 5 hours</li>
+                {!canceled && nextBillText && (
+                  <li>Next billing date: {nextBillText}</li>
+                )}
+              </ul>
+              {canceled && cancelDateText ? (
+                <p className="plan-card-policy">
+                  Your plan remains active until {cancelDateText}. After that
+                  you&apos;ll move to the Free plan. No refund is issued for the
+                  current period.
+                </p>
+              ) : (
+                isPaid &&
+                nextBillText && (
+                  <p className="plan-card-policy">
+                    Your plan remains active until {nextBillText}. If you cancel,
+                    you keep access until that date.
+                  </p>
+                )
+              )}
+              <button
+                type="button"
+                className={`btn plan-change-btn${plan === "Max" ? " manage" : ""}`}
+                // state.manage lets /plans show even though the user has a plan.
+                onClick={() => navigate("/plans", { state: { manage: true } })}
+              >
+                {plan === "Max" ? "Manage Plan" : "Upgrade Plan"}
+              </button>
+            </div>
+            {isPaid &&
+              (canceled ? (
+                <button
+                  type="button"
+                  className="cancel-sub-link reactivate"
+                  onClick={handleReactivate}
+                  disabled={reactivating}
+                >
+                  {reactivating ? "Reactivating…" : "Reactivate subscription"}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="cancel-sub-link"
+                  onClick={() => setCancelOpen(true)}
+                >
+                  Cancel subscription
+                </button>
+              ))}
+          </section>
+
+          <hr className="account-divider" />
+
           {/* ---------- Profile ---------- */}
           <section className="account-section">
             <h2>Profile</h2>
@@ -678,6 +830,59 @@ function AccountPage() {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel-subscription confirmation. */}
+      {cancelOpen && (
+        <div
+          className="modal-overlay delete-overlay"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !canceling) setCancelOpen(false);
+          }}
+        >
+          <div
+            className="modal cancel-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="cancel-title"
+          >
+            <h2 id="cancel-title">Are you sure you want to cancel?</h2>
+            <p className="modal-sub">
+              {nextBillText ? (
+                <>
+                  You&apos;ll keep access to Fetchit {plan} until{" "}
+                  <strong>{nextBillText}</strong>.
+                </>
+              ) : (
+                <>You&apos;ll keep access until the end of your billing period.</>
+              )}
+            </p>
+            <p className="cancel-policy">
+              No refund will be issued. You will keep full access to Fetchit{" "}
+              {plan} until the end of your current billing period. Your plan does
+              not change until your billing period ends
+              {nextBillText ? <> — {nextBillText}</> : null}.
+            </p>
+            <div className="cancel-actions">
+              <button
+                type="button"
+                className="btn delete-keep-btn"
+                onClick={() => setCancelOpen(false)}
+                disabled={canceling}
+              >
+                Keep my plan
+              </button>
+              <button
+                type="button"
+                className="danger-btn danger-btn-solid"
+                onClick={handleCancelSub}
+                disabled={canceling}
+              >
+                {canceling ? "Canceling…" : "Cancel subscription"}
+              </button>
+            </div>
           </div>
         </div>
       )}

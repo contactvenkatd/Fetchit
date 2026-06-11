@@ -48,7 +48,8 @@ function SignupPage() {
           <h1>Check your email 🐕</h1>
           <p className="auth-sub">
             We sent a verification link to <strong>{email}</strong>. Click it to
-            activate your account, then sign in to start fetching.
+            verify your account — you&apos;ll be taken straight to choose your
+            plan.
           </p>
           <button
             type="button"

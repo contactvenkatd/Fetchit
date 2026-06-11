@@ -1,54 +1,81 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import {
+  Elements,
+  CardNumberElement,
+  CardExpiryElement,
+  CardCvcElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
 import AuthLayout from "./AuthLayout";
-import { finalizePlan } from "../utils";
+import { useAuth } from "../AuthContext";
+import {
+  finalizePlan,
+  createSubscription,
+  detectPlanChange,
+  cancelStripeSubscriptions,
+  sendPlanEmail,
+} from "../utils";
+import {
+  stripePromise,
+  monthlyDisplay,
+  annualTotal,
+  isFlatPlan,
+  money,
+} from "../stripeClient";
+import "./Pricing.css"; // billing-toggle / billing-option / save-badge styles
 import "./CheckoutPage.css";
 
 const prefersReduced = () =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-const formatCardNumber = (value) =>
-  value
-    .replace(/\D/g, "")
-    .slice(0, 16)
-    .replace(/(.{4})/g, "$1 ")
-    .trim();
-
-const formatExpiry = (value) => {
-  const digits = value.replace(/\D/g, "").slice(0, 4);
-  if (digits.length <= 2) return digits;
-  return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+// Shared look for the three Stripe Element iframes — match the app's inputs.
+const ELEMENT_STYLE = {
+  base: {
+    color: "#1A1A1A",
+    fontFamily: '"Nunito", sans-serif',
+    fontSize: "16px",
+    fontWeight: "600",
+    "::placeholder": { color: "#9a9a9a" },
+  },
+  invalid: { color: "#d32f2f", iconColor: "#d32f2f" },
 };
 
-function isFutureExpiry(mmYY) {
-  const m = mmYY.match(/^(\d{2})\/(\d{2})$/);
-  if (!m) return false;
-  const month = Number(m[1]);
-  const year = 2000 + Number(m[2]);
-  if (month < 1 || month > 12) return false;
-  const now = new Date();
-  const endOfCardMonth = new Date(year, month, 1); // first day of next month
-  return endOfCardMonth > now;
-}
-
-function CheckoutPage() {
+// The card form. Lives inside <Elements> so the Stripe hooks are available.
+function CheckoutForm({ plan }) {
   const navigate = useNavigate();
-  const location = useLocation();
-  const plan = location.state && location.state.plan;
+  const { session } = useAuth();
+  const stripe = useStripe();
+  const elements = useElements();
   const successRef = useRef(null);
 
+  // The checkout's own billing toggle, seeded from what the user picked on the
+  // plans page. The amount actually charged follows this toggle.
+  const [billing, setBilling] = useState(
+    plan.billing === "annual" ? "annual" : "monthly"
+  );
+  const isAnnual = billing === "annual";
+
   const [name, setName] = useState("");
-  const [card, setCard] = useState("");
-  const [expiry, setExpiry] = useState("");
-  const [cvv, setCvv] = useState("");
-  const [errors, setErrors] = useState({});
+  const [cardComplete, setCardComplete] = useState({
+    number: false,
+    expiry: false,
+    cvc: false,
+  });
+  const [error, setError] = useState("");
+  const [processing, setProcessing] = useState(false);
   const [done, setDone] = useState(false);
 
-  // No plan in nav state → back to plan selection.
-  useEffect(() => {
-    if (!plan) navigate("/plans", { replace: true });
-  }, [plan, navigate]);
+  const flat = isFlatPlan(plan.name);
+  const perMonth = monthlyDisplay(plan.name, billing);
+  const priceLabel = `$${money(perMonth)}/mo`;
+  const billingNote = flat
+    ? "Flat rate, no commitment."
+    : isAnnual
+    ? `Billed annually — $${money(annualTotal(plan.name))}/year today.`
+    : "Billed monthly. Cancel anytime.";
 
   useEffect(() => {
     if (done) {
@@ -62,155 +89,256 @@ function CheckoutPage() {
     return undefined;
   }, [done, navigate]);
 
-  if (!plan) return null;
-
-  const validate = () => {
-    const next = {};
-    if (!name.trim()) next.name = "Cardholder name is required";
-    if (card.replace(/\s/g, "").length !== 16)
-      next.card = "Card number must be 16 digits";
-    if (!isFutureExpiry(expiry)) next.expiry = "Enter a valid future date";
-    if (!/^\d{3}$/.test(cvv)) next.cvv = "CVV must be 3 digits";
-    setErrors(next);
-    return Object.keys(next).length === 0;
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validate()) return;
-    await finalizePlan(plan.name);
-    setDone(true);
+    setError("");
+    if (!stripe || !elements) return; // Stripe.js still loading.
+    if (!name.trim()) {
+      setError("Cardholder name is required.");
+      return;
+    }
+    if (!cardComplete.number || !cardComplete.expiry || !cardComplete.cvc) {
+      setError("Please enter your full card details.");
+      return;
+    }
+
+    setProcessing(true);
+
+    // Classify the change from the CURRENT plan BEFORE we mutate metadata, using
+    // the live billing toggle (so a toggle change on this page is respected).
+    const change = detectPlanChange(session, plan.name, billing);
+
+    // 1. Server creates (or reuses) the customer + an incomplete subscription
+    //    and hands back the PaymentIntent client secret + the new sub id.
+    const { data, error: subError } = await createSubscription({
+      plan: plan.name,
+      billing,
+    });
+    if (subError) {
+      setError(subError.message);
+      setProcessing(false);
+      return;
+    }
+    const newSubscriptionId = data.subscriptionId;
+
+    // 2. Confirm the card payment in the browser (secret key never involved).
+    const { error: payError, paymentIntent } = await stripe.confirmCardPayment(
+      data.clientSecret,
+      {
+        payment_method: {
+          card: elements.getElement(CardNumberElement),
+          billing_details: { name: name.trim() },
+        },
+      }
+    );
+    if (payError) {
+      setError(payError.message || "Payment could not be completed.");
+      setProcessing(false);
+      return;
+    }
+    if (paymentIntent && ["succeeded", "processing"].includes(paymentIntent.status)) {
+      // 3. Record the new plan (+ billing period) on the user.
+      await finalizePlan(plan.name, billing);
+
+      // 4. For a change (not a first purchase), cancel the OLD subscription —
+      //    immediately for an upgrade / billing switch, at period end for a
+      //    downgrade — leaving the just-created one untouched.
+      const isChange = ["upgrade", "downgrade", "billing_change"].includes(
+        change.type
+      );
+      if (isChange) {
+        await cancelStripeSubscriptions({
+          exceptSubscriptionId: newSubscriptionId,
+          atPeriodEnd: change.type === "downgrade",
+        });
+      }
+
+      // 5. Send the matching confirmation email. Upgrade reuses the purchase
+      //    "Welcome to Fetchit <Plan>!" template; downgrade / billing switch
+      //    have their own.
+      const emailType =
+        change.type === "downgrade"
+          ? "downgrade"
+          : change.type === "billing_change"
+          ? "billing_change"
+          : "purchase";
+      sendPlanEmail({
+        type: emailType,
+        plan: plan.name,
+        billing,
+        fromPlan: change.fromPlan || undefined,
+      });
+
+      setDone(true);
+      return;
+    }
+
+    setError("Payment could not be completed. Please try again.");
+    setProcessing(false);
   };
 
   if (done) {
     return (
-      <AuthLayout>
-        <div className="auth-card checkout-success" ref={successRef} tabIndex={-1}>
-          <div className="success-check" aria-hidden="true">
-            <svg viewBox="0 0 52 52">
-              <circle className="sc-circle" cx="26" cy="26" r="24" />
-              <path className="sc-tick" d="M14 27l8 8 16-16" />
-            </svg>
-          </div>
-          <h1>You&apos;re all set! 🐕</h1>
-          <p className="auth-sub">
-            Welcome to Fetchit {plan.name}. Just one more step…
-          </p>
+      <div className="auth-card checkout-success" ref={successRef} tabIndex={-1}>
+        <div className="success-check" aria-hidden="true">
+          <svg viewBox="0 0 52 52">
+            <circle className="sc-circle" cx="26" cy="26" r="24" />
+            <path className="sc-tick" d="M14 27l8 8 16-16" />
+          </svg>
         </div>
-      </AuthLayout>
+        <h1>You&apos;re all set! 🐕</h1>
+        <p className="auth-sub">
+          Welcome to Fetchit {plan.name}. Just one more step…
+        </p>
+      </div>
     );
   }
 
   return (
-    <AuthLayout>
-      <div className="auth-card">
+    <div className="auth-card">
+      <button
+        type="button"
+        className="back-link"
+        onClick={() => navigate("/plans")}
+      >
+        ← Back
+      </button>
+      <h1>Complete your subscription</h1>
+
+      <div
+        className="billing-toggle co-billing"
+        role="group"
+        aria-label="Billing period"
+      >
         <button
           type="button"
-          className="back-link"
-          onClick={() => navigate("/plans")}
+          className={`billing-option${!isAnnual ? " active" : ""}`}
+          onClick={() => setBilling("monthly")}
+          aria-pressed={!isAnnual}
         >
-          ← Back
+          Monthly
         </button>
-        <h1>Complete your subscription</h1>
+        <button
+          type="button"
+          className={`billing-option${isAnnual ? " active" : ""}`}
+          onClick={() => setBilling("annual")}
+          aria-pressed={isAnnual}
+        >
+          Annual
+          <span className="save-badge">Save 10%</span>
+        </button>
+      </div>
 
-        <div className="checkout-summary">
-          <span className="cs-plan">Fetchit {plan.name}</span>
-          <span className="cs-price">{plan.priceLabel}</span>
+      <div className="checkout-summary">
+        <span className="cs-plan">Fetchit {plan.name}</span>
+        <span className="cs-price">{priceLabel}</span>
+      </div>
+      <p className="co-billing-note">{billingNote}</p>
+
+      <form onSubmit={handleSubmit} noValidate>
+        <div className="auth-field">
+          <label htmlFor="co-name">Cardholder name</label>
+          <input
+            id="co-name"
+            type="text"
+            placeholder="Alex Johnson"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoComplete="cc-name"
+          />
         </div>
 
-        <form onSubmit={handleSubmit} noValidate>
-          <div className="auth-field">
-            <label htmlFor="co-name">Cardholder name</label>
-            <input
-              id="co-name"
-              type="text"
-              placeholder="Alex Johnson"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoComplete="cc-name"
-              aria-invalid={!!errors.name}
-              aria-describedby={errors.name ? "co-name-err" : undefined}
+        <div className="auth-field">
+          <label htmlFor="co-card">Card number</label>
+          <div className="stripe-input" id="co-card">
+            <CardNumberElement
+              options={{ style: ELEMENT_STYLE, showIcon: true }}
+              onChange={(e) =>
+                setCardComplete((c) => ({ ...c, number: e.complete }))
+              }
             />
-            {errors.name && (
-              <p className="field-error" id="co-name-err" role="alert">
-                {errors.name}
-              </p>
-            )}
           </div>
+        </div>
 
+        <div className="checkout-row">
           <div className="auth-field">
-            <label htmlFor="co-card">Card number</label>
-            <input
-              id="co-card"
-              type="text"
-              inputMode="numeric"
-              placeholder="1234 5678 9012 3456"
-              value={card}
-              onChange={(e) => setCard(formatCardNumber(e.target.value))}
-              autoComplete="cc-number"
-              aria-invalid={!!errors.card}
-              aria-describedby={errors.card ? "co-card-err" : undefined}
-            />
-            {errors.card && (
-              <p className="field-error" id="co-card-err" role="alert">
-                {errors.card}
-              </p>
-            )}
-          </div>
-
-          <div className="checkout-row">
-            <div className="auth-field">
-              <label htmlFor="co-exp">Expiry (MM/YY)</label>
-              <input
-                id="co-exp"
-                type="text"
-                inputMode="numeric"
-                placeholder="MM/YY"
-                value={expiry}
-                onChange={(e) => setExpiry(formatExpiry(e.target.value))}
-                autoComplete="cc-exp"
-                aria-invalid={!!errors.expiry}
-                aria-describedby={errors.expiry ? "co-exp-err" : undefined}
+            <label htmlFor="co-exp">Expiry</label>
+            <div className="stripe-input" id="co-exp">
+              <CardExpiryElement
+                options={{ style: ELEMENT_STYLE }}
+                onChange={(e) =>
+                  setCardComplete((c) => ({ ...c, expiry: e.complete }))
+                }
               />
-              {errors.expiry && (
-                <p className="field-error" id="co-exp-err" role="alert">
-                  {errors.expiry}
-                </p>
-              )}
-            </div>
-            <div className="auth-field">
-              <label htmlFor="co-cvv">CVV</label>
-              <input
-                id="co-cvv"
-                type="text"
-                inputMode="numeric"
-                placeholder="123"
-                value={cvv}
-                onChange={(e) => setCvv(e.target.value.replace(/\D/g, "").slice(0, 3))}
-                autoComplete="cc-csc"
-                aria-invalid={!!errors.cvv}
-                aria-describedby={errors.cvv ? "co-cvv-err" : undefined}
-              />
-              {errors.cvv && (
-                <p className="field-error" id="co-cvv-err" role="alert">
-                  {errors.cvv}
-                </p>
-              )}
             </div>
           </div>
+          <div className="auth-field">
+            <label htmlFor="co-cvv">CVC</label>
+            <div className="stripe-input" id="co-cvv">
+              <CardCvcElement
+                options={{ style: ELEMENT_STYLE }}
+                onChange={(e) =>
+                  setCardComplete((c) => ({ ...c, cvc: e.complete }))
+                }
+              />
+            </div>
+          </div>
+        </div>
 
-          <p className="stripe-note">
-            <span className="stripe-lock" aria-hidden="true">
-              🔒
-            </span>
-            Secured by Stripe
+        {error && (
+          <p className="field-error checkout-error" role="alert">
+            {error}
           </p>
+        )}
 
-          <button type="submit" className="btn btn-primary auth-btn">
-            Start Fetchit {plan.name}
-          </button>
-        </form>
-      </div>
+        <p className="stripe-note">
+          <span className="stripe-lock" aria-hidden="true">
+            🔒
+          </span>
+          Secured by Stripe
+        </p>
+        <p className="stripe-test-hint">
+          Test mode — use card <code>4242 4242 4242 4242</code>, any future
+          expiry &amp; CVC.
+        </p>
+
+        <button
+          type="submit"
+          className="btn btn-primary auth-btn"
+          disabled={!stripe || processing}
+        >
+          {processing ? "Processing…" : `Start Fetchit ${plan.name}`}
+        </button>
+
+        <p className="checkout-policy">
+          By subscribing you agree to our Terms of Service. No refunds. Cancel
+          anytime — you keep full access until the end of your billing period.
+          Your plan begins the day of purchase and renews every month or year
+          depending on the billing period you selected.
+        </p>
+      </form>
+    </div>
+  );
+}
+
+function CheckoutPage() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const plan = location.state && location.state.plan;
+
+  // No plan in nav state → back to plan selection. Free needs no payment.
+  useEffect(() => {
+    if (!plan) navigate("/plans", { replace: true });
+    else if (plan.name === "Free") navigate("/onboarding", { replace: true });
+  }, [plan, navigate]);
+
+  if (!plan || plan.name === "Free") return null;
+
+  return (
+    <AuthLayout>
+      <Elements stripe={stripePromise}>
+        <CheckoutForm plan={plan} />
+      </Elements>
     </AuthLayout>
   );
 }

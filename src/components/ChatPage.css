@@ -6,6 +6,43 @@
   color: var(--white);
   animation: route-fade 0.4s ease;
 }
+
+/* Session-limit message — a Fetchit bubble with a yellow accent + upgrade CTA.
+   (Token counts are never shown; only this friendly reset/upgrade prompt.) */
+.bubble-limit {
+  border-left: 3px solid var(--yellow);
+}
+.bubble-limit p {
+  margin: 0 0 0.4rem;
+}
+.bubble-limit p:last-of-type {
+  margin-bottom: 0;
+}
+.bubble-limit .limit-title {
+  font-weight: 800;
+}
+.limit-upgrade {
+  margin-top: 0.7rem;
+  background: var(--yellow);
+  color: var(--charcoal);
+  border: none;
+  border-radius: 999px;
+  padding: 0.5rem 1.1rem;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.limit-upgrade:hover {
+  background: var(--yellow-deep, #f5c400);
+  transform: translateY(-1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .limit-upgrade {
+    transition: none;
+  }
+}
 .chat-col {
   flex: 1;
   min-width: 0;
