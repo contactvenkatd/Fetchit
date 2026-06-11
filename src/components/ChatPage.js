@@ -2,12 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ProductCard from "./ProductCard";
 import ChatSidebar from "./ChatSidebar";
+import { useAuth } from "../AuthContext";
 import {
-  getSession,
-  clearSession,
+  signOut,
+  getName,
   getChats,
   saveChat,
   deleteChat,
+  saveOrder,
 } from "../utils";
 import "./ChatMockup.css"; // reuse bubble / typing / progress / product-scroll styles
 import "./ChatPage.css";
@@ -48,7 +50,9 @@ function pickProducts(query) {
 }
 
 const makeId = () =>
-  `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const truncate = (s, n) => (s.length > n ? `${s.slice(0, n)}…` : s);
 
 function Message({ m, onBuy }) {
@@ -98,8 +102,8 @@ function Message({ m, onBuy }) {
 
 function ChatPage() {
   const navigate = useNavigate();
-  const session = getSession();
-  const email = session && session.email;
+  const { session, loading } = useAuth();
+  const email = session && session.user && session.user.email;
 
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -117,14 +121,21 @@ function ChatPage() {
   const menuRef = useRef(null);
   const currentChatRef = useRef(null); // { id, title, createdAt }
 
-  // Protected route: must be logged in.
+  // Protected route: must be logged in (once the session check resolves).
   useEffect(() => {
-    if (!session) navigate("/login", { replace: true });
-  }, [session, navigate]);
+    if (!loading && !session) navigate("/login", { replace: true });
+  }, [loading, session, navigate]);
 
   // Load this user's chat history.
   useEffect(() => {
-    if (email) setChats(getChats(email));
+    if (!email) return undefined;
+    let active = true;
+    getChats().then((list) => {
+      if (active) setChats(list);
+    });
+    return () => {
+      active = false;
+    };
   }, [email]);
 
   useEffect(() => {
@@ -151,18 +162,26 @@ function ChatPage() {
 
   // Persist the current chat whenever it changes (skipped in incognito).
   useEffect(() => {
-    if (incognito || !email) return;
+    if (incognito || !email) return undefined;
     const meta = currentChatRef.current;
-    if (!meta) return;
+    if (!meta) return undefined;
     const persistable = messages.filter(
       (m) => m.type === "text" || m.type === "products"
     );
-    if (persistable.length === 0) return;
-    const list = saveChat(email, { ...meta, messages: persistable });
-    setChats(list);
+    if (persistable.length === 0) return undefined;
+    let active = true;
+    (async () => {
+      await saveChat({ ...meta, messages: persistable });
+      if (!active) return;
+      const list = await getChats();
+      if (active) setChats(list);
+    })();
+    return () => {
+      active = false;
+    };
   }, [messages, incognito, email]);
 
-  if (!session) return null;
+  if (loading || !session) return null;
 
   const nextId = () => {
     idRef.current += 1;
@@ -225,6 +244,7 @@ function ChatPage() {
     add({ sender: "user", type: "text", text: "Buy This 🐕" });
     add({ sender: "fetchit", type: "text", text: "🛒 Checking out in the background..." });
     if (!reduced) add({ sender: "fetchit", type: "progress" });
+    saveOrder({ productName: product.name, price: product.price });
     schedule(() => {
       removeType("progress");
       add({ sender: "fetchit", type: "text", text: `✅ Done! Your ${product.name} is ordered. Confirmation sent to your email.` });
@@ -256,10 +276,10 @@ function ChatPage() {
     setSidebarOpen(false);
   };
 
-  const handleDeleteChat = (id) => {
+  const handleDeleteChat = async (id) => {
     if (!window.confirm("Delete this chat? This can't be undone.")) return;
-    const list = deleteChat(email, id);
-    setChats(list);
+    await deleteChat(id);
+    setChats((prev) => prev.filter((c) => c.id !== id));
     if (currentChatRef.current && currentChatRef.current.id === id) resetToEmpty();
   };
 
@@ -272,15 +292,17 @@ function ChatPage() {
   const exitIncognito = () => {
     setIncognito(false);
     resetToEmpty();
-    if (email) setChats(getChats(email));
+    if (email) getChats().then(setChats);
   };
 
-  const handleLogout = () => {
-    clearSession();
+  const handleLogout = async () => {
+    await signOut();
     navigate("/");
   };
 
-  const initial = (email || "?").charAt(0).toUpperCase();
+  const { firstName } = getName(session);
+  const greeting = firstName ? `Hi, ${firstName} 👋` : email;
+  const initial = (firstName || email || "?").charAt(0).toUpperCase();
 
   return (
     <div className={`chat-shell${incognito ? " incognito" : ""}`}>
@@ -332,11 +354,14 @@ function ChatPage() {
                   aria-expanded={menuOpen}
                 >
                   <span className="account-avatar" aria-hidden="true">{initial}</span>
-                  <span className="account-email">{email}</span>
+                  <span className="account-email">{greeting}</span>
                   <span className="account-caret" aria-hidden="true">⌄</span>
                 </button>
                 {menuOpen && (
                   <div className="account-menu" role="menu">
+                    <button role="menuitem" onClick={() => navigate("/account")}>
+                      Account Settings
+                    </button>
                     <button role="menuitem" onClick={handleLogout}>Log Out</button>
                   </div>
                 )}

@@ -1,0 +1,420 @@
+/* Account settings — dark charcoal shell matching the chat page. */
+.account-page {
+  min-height: 100vh;
+  background: var(--charcoal);
+  color: var(--white);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Top bar ---------- */
+.account-topbar {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.8rem 1.2rem;
+  background: #1f1f1f;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.account-back {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--white);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.account-back:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+.account-topbar .logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.account-topbar .logo-text {
+  color: var(--white);
+}
+.account-topbar-title {
+  margin-left: auto;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ---------- Card ---------- */
+.account-main {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 2.4rem 1.2rem 3.5rem;
+}
+.account-card {
+  width: 100%;
+  max-width: 560px;
+  background: #1f1f1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  padding: 1.8rem 1.8rem 2rem;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.account-section h2 {
+  font-family: "Baloo 2", sans-serif;
+  font-size: 1.25rem;
+  font-weight: 800;
+  margin-bottom: 0.25rem;
+}
+.account-section-sub {
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 1.1rem;
+}
+
+.account-divider {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 1.8rem 0;
+}
+
+/* ---------- Fields ---------- */
+.account-row {
+  display: flex;
+  gap: 1rem;
+}
+.account-row .account-field {
+  flex: 1;
+}
+.account-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+}
+.account-field label {
+  font-weight: 700;
+  font-size: 0.88rem;
+  margin-bottom: 0.4rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+.account-field input {
+  font-family: "Nunito", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.75rem 0.95rem;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: #2a2a2a;
+  color: var(--white);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  width: 100%;
+}
+.account-field input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+.account-field input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.22);
+}
+.account-field input[aria-invalid="true"] {
+  border-color: var(--orange);
+}
+
+.account-btn-save {
+  margin-top: 0.4rem;
+}
+.account-btn-save:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* ---------- Password strength meter ---------- */
+.pw-strength {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.55rem;
+}
+.pw-bars {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+.pw-bar {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  transition: background 0.2s ease;
+}
+.pw-bar.filled.weak {
+  background: #ff5a5a;
+}
+.pw-bar.filled.fair {
+  background: var(--orange);
+}
+.pw-bar.filled.good {
+  background: var(--yellow-deep);
+}
+.pw-bar.filled.strong {
+  background: #4caf7d;
+}
+.pw-label {
+  font-weight: 800;
+  font-size: 0.8rem;
+  min-width: 46px;
+}
+.pw-label.weak {
+  color: #ff7a7a;
+}
+.pw-label.fair {
+  color: var(--orange);
+}
+.pw-label.good {
+  color: var(--yellow);
+}
+.pw-label.strong {
+  color: #6bd6a0;
+}
+
+/* ---------- Check-your-email panel (password change pending) ---------- */
+.pw-check {
+  background: #2a2a2a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 1.1rem 1.2rem 1.2rem;
+}
+.pw-check-title {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+  margin-bottom: 0.3rem;
+}
+.pw-check p {
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 600;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.pw-check strong {
+  color: var(--yellow);
+}
+.pw-resend {
+  margin-top: 1rem;
+}
+
+/* ---------- Recovery (finish password change) banner ---------- */
+.pw-recovery-banner {
+  background: rgba(76, 175, 125, 0.16);
+  border: 1px solid rgba(76, 175, 125, 0.4);
+  color: #8fe0b4;
+  border-radius: 12px;
+  padding: 0.7rem 0.9rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 1.1rem;
+}
+
+/* ---------- Danger zone ---------- */
+.danger-title {
+  color: #ff6b6b;
+}
+.danger-btn {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 0.7rem 1.5rem;
+  border-radius: 999px;
+  background: transparent;
+  color: #ff6b6b;
+  border: 2px solid #ff6b6b;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.danger-btn:hover:not(:disabled) {
+  background: rgba(255, 107, 107, 0.12);
+}
+.danger-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.danger-btn-solid {
+  width: 100%;
+  background: #e5484d;
+  color: var(--white);
+  border-color: #e5484d;
+  margin-top: 0.4rem;
+}
+.danger-btn-solid:hover:not(:disabled) {
+  background: #cf3d42;
+}
+
+/* ---------- Delete confirmation modals ---------- */
+/* Above everything else (toast is 100, base modal overlay is 200). */
+.delete-overlay {
+  z-index: 1000;
+}
+.delete-modal {
+  border-top: 6px solid #e5484d;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
+}
+.delete-modal h2 {
+  font-size: 1.45rem;
+  font-weight: 800;
+  margin-bottom: 0.6rem;
+  line-height: 1.25;
+}
+.delete-modal .modal-sub {
+  text-align: center;
+}
+.delete-warn-icon {
+  font-size: 2.6rem;
+  line-height: 1;
+  margin-bottom: 0.4rem;
+}
+.delete-warn-box {
+  background: #fdecec;
+  border: 1px solid #f3b4b4;
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  text-align: left;
+  margin: 0.4rem 0 1.3rem;
+}
+.delete-warn-box p {
+  color: #b3261e;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.delete-warn-box ul {
+  list-style: none;
+  margin: 0.5rem 0;
+  padding: 0;
+}
+.delete-warn-box li {
+  color: #b3261e;
+  font-weight: 600;
+  font-size: 0.92rem;
+  padding-left: 1.1rem;
+  position: relative;
+}
+.delete-warn-box li::before {
+  content: "•";
+  position: absolute;
+  left: 0.2rem;
+}
+.delete-warn-final {
+  margin-top: 0.6rem;
+  font-weight: 800 !important;
+}
+.delete-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.delete-keep-btn {
+  background: var(--yellow);
+  color: var(--charcoal);
+  box-shadow: 0 10px 22px rgba(245, 196, 0, 0.3);
+}
+.delete-keep-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 30px rgba(245, 196, 0, 0.38);
+}
+/* In the warning modal, the danger button stretches like the keep button. */
+.delete-actions .danger-btn {
+  width: 100%;
+}
+.delete-confirm-input {
+  font-family: "Nunito", sans-serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-align: center;
+  text-transform: uppercase;
+  padding: 0.8rem 1rem;
+  border: 2px solid #e6e1cf;
+  border-radius: 14px;
+  background: var(--cream);
+  outline: none;
+  margin: 0.4rem 0 1.2rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.delete-confirm-input:focus {
+  border-color: #e5484d;
+  box-shadow: 0 0 0 3px rgba(229, 72, 77, 0.18);
+}
+
+/* ---------- Verify-it's-you modal ---------- */
+.verify-modal {
+  border-top: 6px solid var(--yellow);
+}
+.verify-pw-wrap {
+  position: relative;
+  margin: 0.4rem 0 0.2rem;
+}
+.verify-input {
+  width: 100%;
+  font-family: "Nunito", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.85rem 4rem 0.85rem 1rem;
+  border: 2px solid #e6e1cf;
+  border-radius: 14px;
+  background: var(--cream);
+  color: var(--charcoal);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.verify-input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.18);
+}
+.verify-input[aria-invalid="true"] {
+  border-color: var(--orange);
+}
+.verify-pw-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--orange);
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 8px;
+}
+.verify-pw-toggle:hover {
+  background: var(--yellow-soft);
+}
+.verify-continue {
+  width: 100%;
+  margin-top: 1.1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .delete-keep-btn:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .account-row {
+    flex-direction: column;
+    gap: 0;
+  }
+  .account-topbar-title {
+    display: none;
+  }
+}

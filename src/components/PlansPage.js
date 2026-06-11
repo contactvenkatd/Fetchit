@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthLayout from "./AuthLayout";
-import { getSession, setPendingPlan, finalizePlan } from "../utils";
+import { useAuth } from "../AuthContext";
+import { setPendingPlan, finalizePlan } from "../utils";
 import "./Pricing.css";
 import "./PlansPage.css";
 
@@ -35,15 +36,23 @@ const PLANS = [
 
 function PlansPage() {
   const navigate = useNavigate();
+  const { session } = useAuth();
   const [billing, setBilling] = useState("monthly");
   const isAnnual = billing === "annual";
 
-  const choose = (plan, price) => {
-    const loggedIn = !!getSession();
+  // Go back through browser history; fall back to the landing page if this was
+  // a direct visit (no in-app history to return to).
+  const handleBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate("/");
+  };
+
+  const choose = async (plan, price) => {
+    const loggedIn = !!session;
     if (plan.name === "Free") {
       if (loggedIn) {
-        finalizePlan("Free");
-        navigate("/chat");
+        await finalizePlan("Free");
+        navigate("/onboarding");
       } else {
         setPendingPlan({ name: "Free" });
         navigate("/login");
@@ -66,6 +75,9 @@ function PlansPage() {
 
   return (
     <AuthLayout width="wide">
+      <button type="button" className="plans-back" onClick={handleBack}>
+        ← Back
+      </button>
       <div className="plans-head">
         <h1>Choose your plan</h1>
         <p>You can upgrade anytime.</p>

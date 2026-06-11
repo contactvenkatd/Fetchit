@@ -1,0 +1,48 @@
+/* Onboarding name-collection card — reuses .auth-card / .auth-field styles. */
+.onb-row {
+  display: flex;
+  gap: 1rem;
+}
+.onb-row .auth-field {
+  flex: 1;
+}
+
+/* Yellow primary action ("Let's Go!"). */
+.onb-btn {
+  width: 100%;
+  margin-top: 0.4rem;
+  background: var(--yellow);
+  color: var(--charcoal);
+  box-shadow: 0 10px 22px rgba(245, 196, 0, 0.32);
+}
+.onb-btn:hover:not(:disabled) {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 30px rgba(245, 196, 0, 0.4);
+}
+.onb-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.onb-skip {
+  display: block;
+  margin: 1.1rem auto 0;
+  background: none;
+  border: none;
+  color: var(--charcoal-soft);
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.onb-skip:hover {
+  color: var(--charcoal);
+}
+
+@media (max-width: 480px) {
+  .onb-row {
+    flex-direction: column;
+    gap: 0;
+  }
+}

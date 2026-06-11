@@ -52,7 +52,10 @@ function CheckoutPage() {
 
   useEffect(() => {
     if (done) {
-      const id = setTimeout(() => navigate("/chat"), prefersReduced() ? 300 : 2000);
+      const id = setTimeout(
+        () => navigate("/onboarding"),
+        prefersReduced() ? 300 : 2000
+      );
       if (successRef.current) successRef.current.focus();
       return () => clearTimeout(id);
     }
@@ -72,10 +75,10 @@ function CheckoutPage() {
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
-    finalizePlan(plan.name);
+    await finalizePlan(plan.name);
     setDone(true);
   };
 
@@ -91,7 +94,7 @@ function CheckoutPage() {
           </div>
           <h1>You&apos;re all set! 🐕</h1>
           <p className="auth-sub">
-            Welcome to Fetchit {plan.name}. Taking you to your chat…
+            Welcome to Fetchit {plan.name}. Just one more step…
           </p>
         </div>
       </AuthLayout>
@@ -101,6 +104,13 @@ function CheckoutPage() {
   return (
     <AuthLayout>
       <div className="auth-card">
+        <button
+          type="button"
+          className="back-link"
+          onClick={() => navigate("/plans")}
+        >
+          ← Back
+        </button>
         <h1>Complete your subscription</h1>
 
         <div className="checkout-summary">

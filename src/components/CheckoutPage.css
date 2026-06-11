@@ -1,3 +1,22 @@
+/* Subtle "← Back" link at the top-left of the card. */
+.back-link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--charcoal-soft);
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.back-link:hover {
+  color: var(--charcoal);
+}
+
 .checkout-summary {
   display: flex;
   align-items: center;

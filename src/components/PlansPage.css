@@ -1,3 +1,25 @@
+/* Subtle "← Back" link at the top-left. The plans page sits on the dark
+   charcoal background (no white card), so it uses light grey for contrast.
+   Distinct class name (not the white-card pages' .back-link) to avoid a global
+   CSS color collision. */
+.plans-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.65);
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.plans-back:hover {
+  color: var(--white);
+}
+
 .plans-head {
   text-align: center;
   margin-bottom: 1.6rem;

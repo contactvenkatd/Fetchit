@@ -1,0 +1,74 @@
+/* Subtle "← Back" link at the top-left of the card. */
+.back-link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  margin-bottom: 1rem;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--charcoal-soft);
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.back-link:hover {
+  color: var(--charcoal);
+}
+
+/* Forgot-password link — subtle grey text under the password field. */
+.forgot-link {
+  align-self: flex-end;
+  margin-top: 0.5rem;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--charcoal-soft);
+  font-family: "Nunito", sans-serif;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+.forgot-link:hover {
+  color: var(--charcoal);
+  text-decoration: underline;
+}
+
+/* Yellow CTA used by the reset sub-form ("Send reset link"). */
+.login-yellow-btn {
+  background: var(--yellow);
+  color: var(--charcoal);
+  box-shadow: 0 10px 22px rgba(245, 196, 0, 0.3);
+}
+.login-yellow-btn:hover:not(:disabled) {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 30px rgba(245, 196, 0, 0.4);
+}
+.login-yellow-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* "Back to sign in" link below the reset form. */
+.reset-back-link {
+  display: block;
+  margin: 1.2rem auto 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--charcoal-soft);
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  text-decoration: underline;
+}
+.reset-back-link:hover {
+  color: var(--charcoal);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-yellow-btn:hover:not(:disabled) {
+    transform: none;
+  }
+}

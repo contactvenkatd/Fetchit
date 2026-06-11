@@ -1,4 +1,7 @@
-// Shared helpers for the email signup flow.
+// Shared helpers. Auth, chat history, and order history are backed by Supabase;
+// the early-access email capture (admin/demo) stays in localStorage since it's
+// not tied to a real account.
+import { supabase } from "./supabaseClient";
 
 const STORAGE_KEY = "fetchit_signups";
 
@@ -9,6 +12,9 @@ export function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+// ---------------------------------------------------------------------------
+// Early-access / admin signup list (demo only — localStorage, no account).
+// ---------------------------------------------------------------------------
 export function getSignups() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -36,147 +42,239 @@ export function clearSignups() {
 }
 
 // ---------------------------------------------------------------------------
-// Mock auth / onboarding (all client-side via localStorage).
+// Auth — real Supabase auth (email + password, with email verification).
 // ---------------------------------------------------------------------------
-// Accounts are stored permanently in a registry keyed by email so a user can
-// close the browser, return, and sign back in. The session is separate and is
-// the only thing cleared on sign-out — accounts persist.
-const ACCOUNTS_KEY = "fetchit_accounts"; // { [email]: { email, password, plan, createdAt } }
-const SESSION_KEY = "fetchit_session"; // active login: { email, plan }
-const PENDING_PLAN_KEY = "fetchit_pending_plan"; // plan clicked before logging in
-const CHATS_KEY = "fetchit_chats"; // { [email]: [ { id, title, createdAt, messages } ] }
 
-const readJSON = (key) => {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
+// Create an account. With email confirmation enabled, the returned data has no
+// session until the user clicks the link in their email. The confirmation link
+// redirects back to the app's origin, where detectSessionInUrl signs them in.
+export async function signUp(email, password) {
+  return supabase.auth.signUp({
+    email: email.trim(),
+    password,
+    options: { emailRedirectTo: window.location.origin },
+  });
+}
+
+export async function signIn(email, password) {
+  return supabase.auth.signInWithPassword({ email: email.trim(), password });
+}
+
+export async function signOut() {
+  return supabase.auth.signOut();
+}
+
+// The current session (or null). Async — reads from Supabase storage.
+export async function getSession() {
+  const { data } = await supabase.auth.getSession();
+  return data.session;
+}
+
+// Display name, stored in user_metadata as { first_name, last_name }.
+export function getName(session) {
+  const meta = (session && session.user && session.user.user_metadata) || {};
+  return { firstName: meta.first_name || "", lastName: meta.last_name || "" };
+}
+
+export async function saveName(firstName, lastName) {
+  return supabase.auth.updateUser({
+    data: { first_name: firstName.trim(), last_name: lastName.trim() },
+  });
+}
+
+// Email-confirmed password change (step 1 of 2).
+// We first re-authenticate with the current password (Supabase's updateUser
+// doesn't verify it), then email a confirmation link. The password is NOT
+// changed yet — clicking the link opens a recovery session on /account where
+// the new password is actually set (see applyNewPassword). Nothing sensitive is
+// persisted across the email round-trip.
+export async function requestPasswordChange(currentPassword) {
+  const session = await getSession();
+  const email = session && session.user && session.user.email;
+  if (!email) return { error: { message: "You're not signed in." }, email: null };
+  const { error: reauthError } = await supabase.auth.signInWithPassword({
+    email,
+    password: currentPassword,
+  });
+  if (reauthError) {
+    return { error: { message: "Current password is incorrect." }, email };
   }
-};
-
-function getAccounts() {
-  return readJSON(ACCOUNTS_KEY) || {};
-}
-function saveAccounts(accounts) {
-  localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/account`,
+  });
+  return { error, email };
 }
 
-export function getAccount(email) {
-  return getAccounts()[(email || "").trim()] || null;
-}
-export function getSession() {
-  return readJSON(SESSION_KEY);
-}
-export function isLoggedIn() {
-  return !!getSession();
-}
-// Sign out: clears the session only — the account stays saved.
-export function clearSession() {
-  localStorage.removeItem(SESSION_KEY);
+// Forgot-password: email a reset link that returns to /reset-password. Uses the
+// same "Reset Password" template as the in-app password change; the flows are
+// told apart by the redirectTo path (/reset-password vs /account).
+export async function sendPasswordReset(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+    redirectTo: `${window.location.origin}/reset-password`,
+  });
+  return { error };
 }
 
-// The account for the active session (or null).
-export function getUser() {
-  const session = getSession();
-  return session ? getAccount(session.email) : null;
+// Re-send the confirmation link (the "Resend email" button).
+export async function resendPasswordChangeEmail() {
+  const session = await getSession();
+  const email = session && session.user && session.user.email;
+  if (!email) return { error: { message: "You're not signed in." } };
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/account`,
+  });
+  return { error };
 }
 
-// Create/persist the mock account and start a session. Password stored in plain
-// text — this is a client-side mock only, never do this for real.
-export function createUser(email, password) {
-  const e = email.trim();
-  const accounts = getAccounts();
-  const existing = accounts[e];
-  const account = existing
-    ? { ...existing, password } // re-registering keeps plan/createdAt
-    : { email: e, password, plan: null, createdAt: new Date().toISOString() };
-  accounts[e] = account;
-  saveAccounts(accounts);
-  localStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify({ email: e, plan: account.plan || null })
-  );
-  return account;
+// Step 2 of 2: set the new password inside the recovery session that the email
+// link established. Called from the "Finish your password change" form.
+export async function applyNewPassword(newPassword) {
+  return supabase.auth.updateUser({ password: newPassword });
 }
 
-// Check credentials against the saved account.
-export function authenticate(email, password) {
-  const acc = getAccount(email);
-  return !!(acc && acc.password === password);
+// Verify the signed-in user's password (re-auth). Used to confirm identity
+// before starting the account-deletion email flow.
+export async function verifyPassword(password) {
+  const session = await getSession();
+  const email = session && session.user && session.user.email;
+  if (!email) return { error: { message: "You're not signed in." } };
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return { error: { message: "Incorrect password" } };
+  return { error: null };
 }
 
-// Restore the full session (including saved plan) for a known account.
-export function startSession(email) {
-  const acc = getAccount(email);
-  if (!acc) return null;
-  const session = { email: acc.email, plan: acc.plan || null };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-  return session;
+// Email-confirmed account deletion (step 2): email a confirmation link that
+// returns to /account?type=deletion. Identity is proven by clicking the link;
+// the actual delete only happens after the in-app confirmation modals call
+// deleteAccount(). Used for both the initial send and the "Resend email" button.
+//
+// We use a magic link (signInWithOtp) rather than resetPasswordForEmail so this
+// email uses Supabase's separate "Magic Link" template — the password-change
+// flow already owns the "Reset Password" template, so this keeps the two emails
+// independently brandable. `shouldCreateUser: false` means it only ever mails an
+// existing account.
+export async function sendAccountDeletionEmail() {
+  const session = await getSession();
+  const email = session && session.user && session.user.email;
+  if (!email) return { error: { message: "You're not signed in." }, email: null };
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: {
+      shouldCreateUser: false,
+      emailRedirectTo: `${window.location.origin}/account?type=deletion`,
+    },
+  });
+  return { error, email };
 }
 
-// A plan the user picked while logged out, to resume after they sign in.
+// Delete the signed-in user via the delete_user() RPC (see supabase/schema.sql).
+// Deleting the auth.users row cascades to that user's chats and orders.
+export async function deleteAccount() {
+  const { error } = await supabase.rpc("delete_user");
+  if (error) return { error };
+  // Tear the session down locally. `scope: "local"` skips the network logout —
+  // the user no longer exists, so a global sign-out would just fail — and clears
+  // the session synchronously so no stale auth lingers to cause a redirect flash.
+  await supabase.auth.signOut({ scope: "local" });
+  try {
+    [
+      "fetchit_pending_plan",
+      "fetchit_pw_recovery",
+      "fetchit_delete_intent",
+      "fetchit_reset_recovery",
+    ].forEach((k) => {
+      localStorage.removeItem(k);
+      sessionStorage.removeItem(k);
+    });
+    // Belt and suspenders: drop any Supabase auth token still in storage.
+    Object.keys(localStorage)
+      .filter((k) => k.startsWith("sb-") && k.includes("-auth-token"))
+      .forEach((k) => localStorage.removeItem(k));
+  } catch {
+    /* ignore storage access errors */
+  }
+  return { error: null };
+}
+
+// Record the chosen plan on the user's metadata (and the demo signups list).
+export async function finalizePlan(plan) {
+  await supabase.auth.updateUser({ data: { plan } });
+  const session = await getSession();
+  const email = session && session.user && session.user.email;
+  if (email) saveSignup({ email, plan });
+}
+
+// ---------------------------------------------------------------------------
+// Pending plan — a plan clicked while logged out, resumed after sign-in.
+// Transient UI state, kept in localStorage.
+// ---------------------------------------------------------------------------
+const PENDING_PLAN_KEY = "fetchit_pending_plan";
+
 export function setPendingPlan(plan) {
   localStorage.setItem(PENDING_PLAN_KEY, JSON.stringify(plan));
 }
 export function getPendingPlan() {
-  return readJSON(PENDING_PLAN_KEY);
+  try {
+    const raw = localStorage.getItem(PENDING_PLAN_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 }
 export function clearPendingPlan() {
   localStorage.removeItem(PENDING_PLAN_KEY);
 }
 
-// Lock in the chosen plan (Free pick or after checkout) and record it for admin.
-export function finalizePlan(plan) {
-  const session = getSession();
-  if (!session) return;
-  const accounts = getAccounts();
-  if (accounts[session.email]) {
-    accounts[session.email] = { ...accounts[session.email], plan };
-    saveAccounts(accounts);
+// ---------------------------------------------------------------------------
+// Chat history — Supabase "chats" table, scoped to the user via RLS.
+// Rows: { id, user_id, title, messages (jsonb), created_at }.
+// ---------------------------------------------------------------------------
+const mapChat = (row) => ({
+  id: row.id,
+  title: row.title,
+  createdAt: row.created_at,
+  messages: Array.isArray(row.messages) ? row.messages : [],
+});
+
+export async function getChats() {
+  const { data, error } = await supabase
+    .from("chats")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("getChats failed:", error.message);
+    return [];
   }
-  localStorage.setItem(
-    SESSION_KEY,
-    JSON.stringify({ email: session.email, plan })
-  );
-  saveSignup({ email: session.email, plan });
+  return (data || []).map(mapChat);
+}
+
+// Upsert a chat by id. user_id is filled in by the table's auth.uid() default.
+export async function saveChat(chat) {
+  if (!chat || !chat.id) return null;
+  const { data, error } = await supabase
+    .from("chats")
+    .upsert({ id: chat.id, title: chat.title, messages: chat.messages })
+    .select()
+    .single();
+  if (error) {
+    console.error("saveChat failed:", error.message);
+    return null;
+  }
+  return mapChat(data);
+}
+
+export async function deleteChat(chatId) {
+  const { error } = await supabase.from("chats").delete().eq("id", chatId);
+  if (error) console.error("deleteChat failed:", error.message);
 }
 
 // ---------------------------------------------------------------------------
-// Chat history — scoped per user email so accounts never see each other's chats.
+// Order history — Supabase "orders" table, scoped to the user via RLS.
+// Rows: { id, user_id, product_name, price, status, created_at }.
 // ---------------------------------------------------------------------------
-function getAllChats() {
-  return readJSON(CHATS_KEY) || {};
-}
-
-export function getChats(email) {
-  if (!email) return [];
-  const all = getAllChats();
-  return Array.isArray(all[email]) ? all[email] : [];
-}
-
-// Upsert a chat session { id, title, createdAt, messages } by id (newest first).
-export function saveChat(email, chat) {
-  if (!email || !chat || !chat.id) return getChats(email);
-  const all = getAllChats();
-  const list = Array.isArray(all[email]) ? all[email] : [];
-  const idx = list.findIndex((c) => c.id === chat.id);
-  if (idx >= 0) list[idx] = chat;
-  else list.unshift(chat);
-  all[email] = list;
-  localStorage.setItem(CHATS_KEY, JSON.stringify(all));
-  return list;
-}
-
-export function deleteChat(email, chatId) {
-  const all = getAllChats();
-  all[email] = getChats(email).filter((c) => c.id !== chatId);
-  localStorage.setItem(CHATS_KEY, JSON.stringify(all));
-  return all[email];
-}
-
-export function clearChats(email) {
-  const all = getAllChats();
-  delete all[email];
-  localStorage.setItem(CHATS_KEY, JSON.stringify(all));
+export async function saveOrder({ productName, price, status = "completed" }) {
+  const { error } = await supabase
+    .from("orders")
+    .insert({ product_name: productName, price, status });
+  if (error) console.error("saveOrder failed:", error.message);
 }
