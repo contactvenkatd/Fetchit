@@ -3,24 +3,24 @@ import "./FAQ.css";
 
 const FAQS = [
   {
-    q: "How does Fetchit work?",
-    a: "Tell Fetchit what you're looking for and it searches hundreds of stores, compares prices, and — once you approve — checks out for you. It's like having a shopping-savvy best friend on call 24/7.",
+    q: "How does FetchIt work?",
+    a: "Tell FetchIt what you're looking for and it searches hundreds of stores, compares prices, and — once you approve — checks out for you. It's like having a shopping-savvy best friend on call 24/7.",
   },
   {
     q: "Is my payment info safe?",
-    a: "Absolutely. Your payment details are encrypted and stored with bank-level security, and Fetchit never completes a purchase without your explicit approval.",
+    a: "Absolutely. Your payment details are encrypted and stored with bank-level security, and FetchIt never completes a purchase without your explicit approval.",
   },
   {
     q: "Can I cancel anytime?",
     a: "Yep! There are no contracts or commitments. Cancel or downgrade your plan anytime from your account settings — no questions asked.",
   },
   {
-    q: "Which stores does Fetchit support?",
-    a: "Fetchit works with hundreds of major retailers and adds more every week. If your favorite store isn't supported yet, let us know and we'll fetch it.",
+    q: "Which stores does FetchIt support?",
+    a: "FetchIt works with hundreds of major retailers and adds more every week. If your favorite store isn't supported yet, let us know and we'll fetch it.",
   },
   {
     q: "What happens if I want a refund?",
-    a: "Fetchit tracks every order's return window and helps you start a refund in a couple of taps, guiding you through each store's process so you never miss a deadline.",
+    a: "FetchIt tracks every order's return window and helps you start a refund in a couple of taps, guiding you through each store's process so you never miss a deadline.",
   },
 ];
 

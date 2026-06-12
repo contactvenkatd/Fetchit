@@ -28,7 +28,7 @@ function Features() {
     <section className="block features-block" id="features">
       <div className="container">
         <div className="section-head">
-          <h2>Everything Fetchit Fetches</h2>
+          <h2>Everything FetchIt Fetches</h2>
           <p>A whole pack of smart shopping tools.</p>
         </div>
         <div className="features">

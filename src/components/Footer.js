@@ -10,12 +10,9 @@ function Footer({ onNavigate }) {
     <footer className="footer">
       <div className="container">
         <div className="footer-logo logo">
-          <span className="logo-mark" role="img" aria-label="Fetchit dog">
-            🐕
-          </span>
-          <span className="logo-text">Fetchit</span>
+          <img src="/fetchit-logo.png" alt="FetchIt" className="logo-img" />
         </div>
-        <p className="footer-tagline">Fetchit — your shopping best friend 🦴</p>
+        <p className="footer-tagline">FetchIt — your shopping best friend 🦴</p>
         <nav className="footer-links">
           <a href="#how" onClick={(e) => handleNav(e, "how")}>
             How It Works
@@ -31,7 +28,7 @@ function Footer({ onNavigate }) {
           </a>
         </nav>
         <p className="footer-copy">
-          © 2026 Fetchit. Made with 🧡 for happy shoppers.
+          © 2026 FetchIt. Made with 🧡 for happy shoppers.
         </p>
       </div>
     </footer>

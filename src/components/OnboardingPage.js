@@ -2,12 +2,24 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AuthLayout from "./AuthLayout";
 import { useAuth } from "../AuthContext";
-import { getName, saveName } from "../utils";
+import {
+  getName,
+  saveName,
+  markRegistered,
+  maybeAcceptPendingInvite,
+} from "../utils";
 import "./OnboardingPage.css";
 
-// Post-plan name collection. Protected: only reachable while signed in (the
-// signup flow lands here after a plan is chosen). Names are optional — "Skip
-// for now" goes straight to chat; they can also be set later in /account.
+// Post-plan name collection — the LAST step of signup ("One last thing!").
+// Protected: only reachable while signed in (the signup flow lands here after a
+// plan is chosen). Names are optional — "Skip for now" goes straight to chat;
+// they can also be set later in /account.
+//
+// Completing this step (Save OR Skip) is what marks the account as fully
+// registered (markRegistered → user_metadata.fetchit_registered). That flag is
+// the Google-OAuth source of truth for "has a FetchIt account", so anyone who
+// abandons mid-onboarding stays un-registered and is sent back through the full
+// signup flow on their next Google login (see "Google OAuth" in CLAUDE.md).
 function OnboardingPage() {
   const navigate = useNavigate();
   const { session, loading } = useAuth();
@@ -24,19 +36,32 @@ function OnboardingPage() {
 
   if (loading || !session) return null;
 
+  // Finish onboarding: mark the account registered, accept a pending family
+  // invite (if this was a join-link signup → sets plan to max_family), then enter
+  // the app. Awaited so the flag is persisted before we leave.
+  const completeOnboarding = async () => {
+    await markRegistered();
+    await maybeAcceptPendingInvite();
+    navigate("/chat");
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
     await saveName(firstName, lastName);
-    setSaving(false);
-    navigate("/chat");
+    await completeOnboarding();
+  };
+
+  const handleSkip = async () => {
+    setSaving(true);
+    await completeOnboarding();
   };
 
   return (
     <AuthLayout>
       <div className="auth-card onboarding-card">
         <h1>One last thing! 🐕</h1>
-        <p className="auth-sub">What should Fetchit call you?</p>
+        <p className="auth-sub">What should FetchIt call you?</p>
 
         <form onSubmit={handleSubmit} noValidate>
           <div className="onboarding-row">
@@ -76,7 +101,8 @@ function OnboardingPage() {
         <button
           type="button"
           className="onboarding-skip"
-          onClick={() => navigate("/chat")}
+          onClick={handleSkip}
+          disabled={saving}
         >
           Skip for now
         </button>

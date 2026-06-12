@@ -54,7 +54,7 @@ const PLANS = [
     name: "Free",
     monthly: 0,
     annual: 0,
-    blurb: "Try Fetchit's AI.",
+    blurb: "Try FetchIt's AI.",
     features: [
       "Auto checkout",
       "Full chat history",
@@ -161,7 +161,7 @@ function PlansPage() {
       }
       if (loggedIn) {
         await finalizePlan("Free");
-        navigate("/onboarding");
+        navigate("/delivery-payment");
       } else {
         setPendingPlan({ name: "Free" });
         navigate("/login");
@@ -324,7 +324,7 @@ function PlansPage() {
           >
             <h2 id="dg-title">Downgrade to Free?</h2>
             <p className="modal-sub">
-              You&apos;ll lose access to your Fetchit {currentPlan} features at
+              You&apos;ll lose access to your FetchIt {currentPlan} features at
               the end of your billing period
               {periodEndText ? (
                 <>

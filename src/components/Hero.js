@@ -4,11 +4,16 @@ function Hero({ onSeeHow }) {
   return (
     <section className="hero" id="top">
       <div className="container hero-inner">
+        <img
+          src="/fetchit-logo.png"
+          alt="FetchIt — your shopping best friend"
+          className="hero-logo"
+        />
         <span className="badge">🦴 Your AI shopping best friend</span>
-        <h1>Just Tell Fetchit What You Want</h1>
+        <h1>Just Tell FetchIt What You Want</h1>
         <p>
-          Chat with Fetchit&apos;s AI, get personalized product picks with
-          reviews, and let Fetchit buy it for you — automatically.
+          Chat with FetchIt&apos;s AI, get personalized product picks with
+          reviews, and let FetchIt buy it for you — automatically.
         </p>
         <div className="hero-secondary">
           <button className="btn btn-primary" onClick={onSeeHow}>

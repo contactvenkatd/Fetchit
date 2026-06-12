@@ -18,7 +18,7 @@
 import { createClient } from "npm:@supabase/supabase-js@^2";
 
 const RESEND_API_URL = "https://api.resend.com/emails";
-const FROM = "Fetchit 🐕 <onboarding@resend.dev>";
+const FROM = "FetchIt 🐕 <onboarding@resend.dev>";
 
 const PRICING: Record<string, { monthly: number; annual: number; flat?: boolean }> = {
   Plus: { monthly: 4.99, annual: 4.99, flat: true },
@@ -46,6 +46,22 @@ const money = (n: number) =>
 const fmtDate = (d: Date) =>
   d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
+// The branded header — the FetchIt logo image when we know the app origin (an
+// absolute URL email clients can load), else the emoji-tile + wordmark fallback.
+let LOGO_ORIGIN = "";
+function logoHeader(): string {
+  if (LOGO_ORIGIN) {
+    return `<img src="${LOGO_ORIGIN}/fetchit-logo.png" alt="FetchIt"
+                 width="46" height="46"
+                 style="border-radius:12px;display:inline-block;vertical-align:middle;" />`;
+  }
+  return `<span style="display:inline-block;background:#FFD700;border-radius:14px;
+                       padding:8px 12px;font-size:22px;line-height:1;">🐕</span>
+          <span style="color:#FFFFFF;font-family:'Baloo 2',Arial,sans-serif;
+                       font-weight:800;font-size:22px;vertical-align:middle;
+                       margin-left:10px;">FetchIt</span>`;
+}
+
 // Branded yellow/charcoal shell around the body HTML.
 function wrap(innerHtml: string): string {
   return `
@@ -55,17 +71,13 @@ function wrap(innerHtml: string): string {
       <table width="480" cellpadding="0" cellspacing="0" role="presentation"
              style="background:#FFFFFF;border-radius:24px;overflow:hidden;
                     box-shadow:0 20px 50px rgba(26,26,26,0.12);">
-        <tr><td style="background:#1A1A1A;padding:28px 32px;">
-          <span style="display:inline-block;background:#FFD700;border-radius:14px;
-                       padding:8px 12px;font-size:22px;line-height:1;">🐕</span>
-          <span style="color:#FFFFFF;font-family:'Baloo 2',Arial,sans-serif;
-                       font-weight:800;font-size:22px;vertical-align:middle;
-                       margin-left:10px;">Fetchit</span>
+        <tr><td style="background:#1A1A1A;padding:24px 32px;">
+          ${logoHeader()}
         </td></tr>
         <tr><td style="padding:36px 32px 8px;">${innerHtml}</td></tr>
         <tr><td style="padding:24px 32px 32px;border-top:1px solid #F0ECDF;">
           <p style="margin:0;color:#999999;font-size:13px;">
-            Fetchit — your shopping best friend 🐕
+            FetchIt — your shopping best friend 🐕
           </p>
         </td></tr>
       </table>
@@ -102,10 +114,10 @@ function buildEmail(opts: {
   if (type === "deletion_confirm") {
     const link = `${appOrigin || ""}/account?type=deletion&token=${token || ""}`;
     return {
-      subject: "Confirm your Fetchit account deletion",
+      subject: "Confirm your FetchIt account deletion",
       html: wrap(
         h1("Confirm account deletion 🐕") +
-          p("We received a request to delete your Fetchit account. Click below to proceed. If you didn't request this, you can safely ignore this email — your account is safe.") +
+          p("We received a request to delete your FetchIt account. Click below to proceed. If you didn't request this, you can safely ignore this email — your account is safe.") +
           `<a href="${link}" style="display:inline-block;background:#E5484D;color:#FFFFFF;
              text-decoration:none;font-family:'Baloo 2',Arial,sans-serif;font-weight:700;
              font-size:17px;padding:14px 32px;border-radius:999px;margin-top:8px;">Proceed with deletion</a>` +
@@ -130,11 +142,11 @@ function buildEmail(opts: {
     const until = dateISO ? fmtDate(new Date(dateISO)) : "the end of your billing period";
     const accountUrl = `${appOrigin || ""}/account`;
     return {
-      subject: "Your Fetchit subscription has been cancelled",
+      subject: "Your FetchIt subscription has been cancelled",
       html: wrap(
         h1("Sorry to see you go 🐕") +
-          p(`Your <strong>Fetchit ${plan}</strong> subscription has been cancelled. No refund is issued for the current period.`) +
-          p(`You'll keep <strong>full access</strong> to Fetchit ${plan} until <strong>${until}</strong> — after that you'll move to the Free plan.`) +
+          p(`Your <strong>FetchIt ${plan}</strong> subscription has been cancelled. No refund is issued for the current period.`) +
+          p(`You'll keep <strong>full access</strong> to FetchIt ${plan} until <strong>${until}</strong> — after that you'll move to the Free plan.`) +
           p("Changed your mind? You can reactivate any time before then.") +
           button(accountUrl, "Reactivate subscription"),
       ),
@@ -144,10 +156,10 @@ function buildEmail(opts: {
   if (type === "reactivation") {
     const next = dateISO ? fmtDate(new Date(dateISO)) : null;
     return {
-      subject: `Your Fetchit ${plan} is back! 🐕`,
+      subject: `Your FetchIt ${plan} is back! 🐕`,
       html: wrap(
         h1("Welcome back! 🐕") +
-          p(`Good news — your <strong>Fetchit ${plan}</strong> subscription is active again and will keep renewing as normal.`) +
+          p(`Good news — your <strong>FetchIt ${plan}</strong> subscription is active again and will keep renewing as normal.`) +
           (next ? p(`Your next billing date is <strong>${next}</strong>.`) : "") +
           p("Happy fetching!"),
       ),
@@ -164,11 +176,11 @@ function buildEmail(opts: {
         : "the end of your billing period";
       const accountUrl = `${appOrigin || ""}/account`;
       return {
-        subject: "Your Fetchit plan is changing to Free",
+        subject: "Your FetchIt plan is changing to Free",
         html: wrap(
           h1("Your plan is changing to Free 🐕") +
-            p(`You've requested to downgrade from <strong>Fetchit ${from}</strong> to the Free plan.`) +
-            p(`You'll keep <strong>full access</strong> to Fetchit ${from} until <strong>${until}</strong>. After that your account moves to Free.`) +
+            p(`You've requested to downgrade from <strong>FetchIt ${from}</strong> to the Free plan.`) +
+            p(`You'll keep <strong>full access</strong> to FetchIt ${from} until <strong>${until}</strong>. After that your account moves to Free.`) +
             p("No refund will be issued.") +
             p("Changed your mind? Reactivate at fetchit.app/account") +
             button(accountUrl, "Reactivate subscription"),
@@ -176,11 +188,11 @@ function buildEmail(opts: {
       };
     }
     return {
-      subject: "Your Fetchit plan has been updated",
+      subject: "Your FetchIt plan has been updated",
       html: wrap(
         h1("Your plan has been updated 🐕") +
-          p(`You've switched from <strong>Fetchit ${from}</strong> to <strong>Fetchit ${plan}</strong>. Your new plan is active immediately.`) +
-          p("Thanks for sticking with Fetchit — happy fetching!"),
+          p(`You've switched from <strong>FetchIt ${from}</strong> to <strong>FetchIt ${plan}</strong>. Your new plan is active immediately.`) +
+          p("Thanks for sticking with FetchIt — happy fetching!"),
       ),
     };
   }
@@ -197,10 +209,10 @@ function buildEmail(opts: {
     }
     const period = isAnnual ? "annual" : "monthly";
     return {
-      subject: "Your Fetchit billing has been updated",
+      subject: "Your FetchIt billing has been updated",
       html: wrap(
         h1("Your billing has been updated 🐕") +
-          p(`You've switched to <strong>${period}</strong> billing for <strong>Fetchit ${plan}</strong>.`) +
+          p(`You've switched to <strong>${period}</strong> billing for <strong>FetchIt ${plan}</strong>.`) +
           p(`New billing date: <strong>${next}</strong>.`),
       ),
     };
@@ -217,19 +229,19 @@ function buildEmail(opts: {
     nextText = fmtDate(d);
   }
   return {
-    subject: `Welcome to Fetchit ${plan}! 🐕`,
+    subject: `Welcome to FetchIt ${plan}! 🐕`,
     html: wrap(
-      h1(`Welcome to Fetchit ${plan}! 🐕`) +
+      h1(`Welcome to FetchIt ${plan}! 🐕`) +
         p(`Thanks for subscribing — your plan is active and ready to fetch. Here are the details:`) +
         `<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
                style="margin:8px 0 20px;border-top:1px solid #F0ECDF;border-bottom:1px solid #F0ECDF;">
-          ${detail("Plan", `Fetchit ${plan}`)}
+          ${detail("Plan", `FetchIt ${plan}`)}
           ${detail("Price", `$${money(perMonth)}/mo`)}
           ${detail("Billing", billingLabel)}
           ${detail("Next billing date", nextText)}
           ${detail("Usage", `Up to ${usage} Free usage`)}
         </table>` +
-        p("Head back to Fetchit and start telling it what you want!"),
+        p("Head back to FetchIt and start telling it what you want!"),
     ),
   };
 }
@@ -269,6 +281,7 @@ Deno.serve(async (req) => {
       token: deleteToken = null,
     } = await req.json().catch(() => ({}));
 
+    LOGO_ORIGIN = appOrigin || ""; // header renders the logo image when set
     const { subject, html } = buildEmail({
       type,
       plan,

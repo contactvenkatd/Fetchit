@@ -56,7 +56,7 @@ function Message({ m, onBuy }) {
     return (
       <div className="msg msg-fetchit msg-products">
         <div className="avatar" aria-hidden="true">
-          🐕
+          <img src="/fetchit-logo.png" alt="" className="avatar-img" />
         </div>
         <div className="bubble bubble-products">
           <p className="products-intro">Here are my top 3 picks for her:</p>
@@ -73,9 +73,9 @@ function Message({ m, onBuy }) {
     return (
       <div className="msg msg-fetchit">
         <div className="avatar" aria-hidden="true">
-          🐕
+          <img src="/fetchit-logo.png" alt="" className="avatar-img" />
         </div>
-        <div className="bubble typing" aria-label="Fetchit is typing">
+        <div className="bubble typing" aria-label="FetchIt is typing">
           <span></span>
           <span></span>
           <span></span>
@@ -87,7 +87,7 @@ function Message({ m, onBuy }) {
     return (
       <div className="msg msg-fetchit">
         <div className="avatar" aria-hidden="true">
-          🐕
+          <img src="/fetchit-logo.png" alt="" className="avatar-img" />
         </div>
         <div className="bubble">
           <div className="progress">
@@ -102,7 +102,7 @@ function Message({ m, onBuy }) {
     <div className={`msg ${isUser ? "msg-user" : "msg-fetchit"}`}>
       {!isUser && (
         <div className="avatar" aria-hidden="true">
-          🐕
+          <img src="/fetchit-logo.png" alt="" className="avatar-img" />
         </div>
       )}
       <div className="bubble">{m.text}</div>
@@ -110,14 +110,15 @@ function Message({ m, onBuy }) {
   );
 }
 
-function ChatMockup({ onRequestSignup }) {
+// The hero mock chat is VIEW-ONLY: the conversation auto-plays on scroll, but
+// the user can't type, send, or buy (the whole browser-window has
+// pointer-events: none, and the input/buttons are disabled).
+function ChatMockup() {
   const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState("");
 
   const idRef = useRef(0);
   const timersRef = useRef([]);
   const startedRef = useRef(false);
-  const buyingRef = useRef(false);
   const sectionRef = useRef(null);
   const chatRef = useRef(null);
   const startRef = useRef(null);
@@ -141,11 +142,6 @@ function ChatMockup({ onRequestSignup }) {
     setMessages((prev) => [
       ...prev,
       { id: nextId(), sender: "fetchit", type: "products" },
-    ]);
-  const addProgress = () =>
-    setMessages((prev) => [
-      ...prev,
-      { id: nextId(), sender: "fetchit", type: "progress" },
     ]);
   const removeType = (type) =>
     setMessages((prev) => prev.filter((m) => m.type !== type));
@@ -212,51 +208,18 @@ function ChatMockup({ onRequestSignup }) {
     return () => timers.forEach(clearTimeout);
   }, []);
 
-  const handleBuy = (product) => {
-    if (buyingRef.current) return;
-    buyingRef.current = true;
-    const reduced = prefersReduced();
-
-    addText("user", "Buy This 🐕");
-    addText("fetchit", "On it! 🛒 Checking out in the background...");
-    if (!reduced) addProgress();
-    schedule(() => {
-      removeType("progress");
-      addText(
-        "fetchit",
-        `✅ Done! Your ${product.name} is ordered. Confirmation sent to your email.`
-      );
-      buyingRef.current = false;
-    }, reduced ? 0 : TYPING_MS);
-  };
-
-  const handleSend = (e) => {
-    e.preventDefault();
-    const text = input.trim();
-    if (!text) return;
-    addText("user", text);
-    setInput("");
-    const reduced = prefersReduced();
-    schedule(
-      () =>
-        addText(
-          "fetchit",
-          "This is a demo — the real Fetchit AI is coming soon! Sign up to get early access. 🐕"
-        ),
-      reduced ? 0 : 600
-    );
-    schedule(() => onRequestSignup(), reduced ? 0 : 1400);
-  };
+  // No buy / send handlers — the mock is view-only (see the form below).
 
   return (
     <section className="block chat-section" id="chat" ref={sectionRef}>
       <div className="container">
         <div className="section-head chat-head">
-          <h2>Meet Fetchit AI</h2>
-          <p>Watch a real shopping conversation unfold — then try it yourself.</p>
+          <h2>Meet FetchIt AI</h2>
+          <p>Watch a real shopping conversation unfold.</p>
         </div>
 
-        <div className="browser-window">
+        {/* View-only: pointer-events disabled, inputs/buttons inert. */}
+        <div className="browser-window is-static" aria-hidden="true">
           <div className="browser-bar">
             <span className="dot dot-red"></span>
             <span className="dot dot-yellow"></span>
@@ -266,23 +229,24 @@ function ChatMockup({ onRequestSignup }) {
 
           <div className="chat-area" ref={chatRef}>
             {messages.map((m) => (
-              <Message key={m.id} m={m} onBuy={handleBuy} />
+              <Message key={m.id} m={m} onBuy={() => {}} />
             ))}
           </div>
 
-          <form className="chat-input" onSubmit={handleSend}>
+          <form className="chat-input" onSubmit={(e) => e.preventDefault()}>
             <label htmlFor="chat-text" className="visually-hidden">
-              Message Fetchit
+              Message FetchIt
             </label>
             <input
               id="chat-text"
               type="text"
-              placeholder="Message Fetchit…"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
+              placeholder="Message FetchIt…"
+              readOnly
+              disabled
+              tabIndex={-1}
               autoComplete="off"
             />
-            <button type="submit" className="chat-send">
+            <button type="button" className="chat-send" disabled tabIndex={-1}>
               Send
             </button>
           </form>

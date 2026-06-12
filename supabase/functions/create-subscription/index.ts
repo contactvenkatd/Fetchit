@@ -66,7 +66,7 @@ async function ensureProduct(stripe: Stripe, plan: string): Promise<string> {
     // Search index can lag for brand-new objects; fall through and create.
   }
   const product = await stripe.products.create({
-    name: `Fetchit ${plan}`,
+    name: `FetchIt ${plan}`,
     metadata: { fetchit_plan: plan },
   });
   return product.id;

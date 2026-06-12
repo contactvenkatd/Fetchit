@@ -31,6 +31,16 @@
   position: relative;
   z-index: 1;
 }
+/* Full FetchIt logo (with tagline) — the landing hero has the space to show it
+   large. Square badge, so width follows height. */
+.hero-logo {
+  display: block;
+  width: clamp(160px, 28vw, 240px);
+  height: auto;
+  margin: 0 auto 1.6rem;
+  border-radius: 28px;
+  box-shadow: var(--shadow-md, 0 18px 40px rgba(26, 26, 26, 0.14));
+}
 .badge {
   display: inline-block;
   background: var(--yellow);

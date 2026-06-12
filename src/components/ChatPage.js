@@ -12,11 +12,17 @@ import {
   saveOrder,
   getPlan,
   tokenLimit,
+  weeklyTokenLimit,
   estimateTokens,
   formatResetIn,
   getOrCreateSession,
   isSessionExpired,
   addSessionTokens,
+  getOrCreateWeeklyUsage,
+  isWeekExpired,
+  addWeeklyTokens,
+  familyDisbandDue,
+  leaveFamily,
   NEXT_PLAN,
 } from "../utils";
 import "./ChatMockup.css"; // reuse bubble / typing / progress / product-scroll styles
@@ -34,19 +40,19 @@ const SUGGESTIONS = [
 
 const PRODUCT_SETS = {
   gift: [
-    { id: "tea", name: "Premium Tea Sampler Gift Set", price: "$34.99", rating: "4.8", desc: "A curated box of 12 artisan loose-leaf teas.", bg: "linear-gradient(135deg, #d9c7a3, #b3c79c)", emoji: "🍵" },
-    { id: "bag", name: "Leather Garden Tool Bag", price: "$47.99", rating: "4.6", desc: "Durable waxed-leather tote for her favorite tools.", bg: "linear-gradient(135deg, #cBaA85, #9c7b52)", emoji: "🧰" },
-    { id: "herb", name: "Botanical Herb Starter Kit", price: "$52.00", rating: "4.7", desc: "Everything to grow fresh herbs on the windowsill.", bg: "linear-gradient(135deg, #b6cf9e, #87b56f)", emoji: "🌱" },
+    { id: "tea", name: "Premium Tea Sampler Gift Set", price: "$34.99", rating: "4.8", desc: "A curated box of 12 artisan loose-leaf teas.", bg: "linear-gradient(135deg, #d9c7a3, #b3c79c)", emoji: "🍵", category: "Food & Drink" },
+    { id: "bag", name: "Leather Garden Tool Bag", price: "$47.99", rating: "4.6", desc: "Durable waxed-leather tote for her favorite tools.", bg: "linear-gradient(135deg, #cBaA85, #9c7b52)", emoji: "🧰", category: "Home & Garden" },
+    { id: "herb", name: "Botanical Herb Starter Kit", price: "$52.00", rating: "4.7", desc: "Everything to grow fresh herbs on the windowsill.", bg: "linear-gradient(135deg, #b6cf9e, #87b56f)", emoji: "🌱", category: "Home & Garden" },
   ],
   coffee: [
-    { id: "club", name: "Single-Origin Coffee Club (3 mo)", price: "$39.99", rating: "4.9", desc: "Freshly roasted beans delivered every month.", bg: "linear-gradient(135deg, #a9774f, #6f4426)", emoji: "☕" },
-    { id: "coldbrew", name: "Cold Brew Starter Kit", price: "$29.99", rating: "4.5", desc: "Everything for smooth cold brew at home.", bg: "linear-gradient(135deg, #c9a37a, #8a5a34)", emoji: "🧊" },
-    { id: "sampler", name: "World Sampler Coffee Box", price: "$44.00", rating: "4.7", desc: "Twelve single-origin beans from around the globe.", bg: "linear-gradient(135deg, #b98a5e, #7a4e2c)", emoji: "🌍" },
+    { id: "club", name: "Single-Origin Coffee Club (3 mo)", price: "$39.99", rating: "4.9", desc: "Freshly roasted beans delivered every month.", bg: "linear-gradient(135deg, #a9774f, #6f4426)", emoji: "☕", category: "Food & Drink" },
+    { id: "coldbrew", name: "Cold Brew Starter Kit", price: "$29.99", rating: "4.5", desc: "Everything for smooth cold brew at home.", bg: "linear-gradient(135deg, #c9a37a, #8a5a34)", emoji: "🧊", category: "Kitchen" },
+    { id: "sampler", name: "World Sampler Coffee Box", price: "$44.00", rating: "4.7", desc: "Twelve single-origin beans from around the globe.", bg: "linear-gradient(135deg, #b98a5e, #7a4e2c)", emoji: "🌍", category: "Food & Drink" },
   ],
   headphones: [
-    { id: "aero", name: "AeroBuds Wireless Earbuds", price: "$79.99", rating: "4.6", desc: "30-hour battery with active noise isolation.", bg: "linear-gradient(135deg, #5b6b86, #2f3a4f)", emoji: "🎧" },
-    { id: "wave", name: "SoundWave Over-Ear Wireless", price: "$99.00", rating: "4.8", desc: "Plush comfort and deep, balanced bass.", bg: "linear-gradient(135deg, #6d6f76, #34363c)", emoji: "🎧" },
-    { id: "fit", name: "FitSport Wireless Buds", price: "$59.99", rating: "4.4", desc: "Sweatproof and secure for every workout.", bg: "linear-gradient(135deg, #4f7d6a, #2c4a3d)", emoji: "🏃" },
+    { id: "aero", name: "AeroBuds Wireless Earbuds", price: "$79.99", rating: "4.6", desc: "30-hour battery with active noise isolation.", bg: "linear-gradient(135deg, #5b6b86, #2f3a4f)", emoji: "🎧", category: "Electronics" },
+    { id: "wave", name: "SoundWave Over-Ear Wireless", price: "$99.00", rating: "4.8", desc: "Plush comfort and deep, balanced bass.", bg: "linear-gradient(135deg, #6d6f76, #34363c)", emoji: "🎧", category: "Electronics" },
+    { id: "fit", name: "FitSport Wireless Buds", price: "$59.99", rating: "4.4", desc: "Sweatproof and secure for every workout.", bg: "linear-gradient(135deg, #4f7d6a, #2c4a3d)", emoji: "🏃", category: "Electronics" },
   ],
 };
 
@@ -65,12 +71,24 @@ const truncate = (s, n) => (s.length > n ? `${s.slice(0, n)}…` : s);
 
 function Message({ m, onBuy, onUpgrade }) {
   if (m.type === "limit") {
+    const weekly = m.scope === "weekly";
     return (
       <div className="msg msg-fetchit">
-        <div className="avatar" aria-hidden="true">🐕</div>
+        <div className="avatar" aria-hidden="true">
+          <img src="/fetchit-logo.png" alt="" className="avatar-img" />
+        </div>
         <div className="bubble bubble-limit" role="status">
-          <p className="limit-title">You&apos;ve reached your session limit 🐕</p>
-          <p>Your session resets in {m.resetText}.</p>
+          {weekly ? (
+            <>
+              <p className="limit-title">You&apos;ve reached your weekly limit 🐕</p>
+              <p>Resets Monday at midnight.</p>
+            </>
+          ) : (
+            <>
+              <p className="limit-title">You&apos;ve reached your session limit 🐕</p>
+              <p>Your session resets in {m.resetText}.</p>
+            </>
+          )}
           {m.next && (
             <>
               <p>
@@ -88,7 +106,9 @@ function Message({ m, onBuy, onUpgrade }) {
   if (m.type === "products") {
     return (
       <div className="msg msg-fetchit msg-products">
-        <div className="avatar" aria-hidden="true">🐕</div>
+        <div className="avatar" aria-hidden="true">
+          <img src="/fetchit-logo.png" alt="" className="avatar-img" />
+        </div>
         <div className="bubble bubble-products">
           <p className="products-intro">Here are 3 great matches:</p>
           <div className="product-scroll">
@@ -103,8 +123,10 @@ function Message({ m, onBuy, onUpgrade }) {
   if (m.type === "typing") {
     return (
       <div className="msg msg-fetchit">
-        <div className="avatar" aria-hidden="true">🐕</div>
-        <div className="bubble typing" aria-label="Fetchit is typing">
+        <div className="avatar" aria-hidden="true">
+          <img src="/fetchit-logo.png" alt="" className="avatar-img" />
+        </div>
+        <div className="bubble typing" aria-label="FetchIt is typing">
           <span></span><span></span><span></span>
         </div>
       </div>
@@ -113,7 +135,9 @@ function Message({ m, onBuy, onUpgrade }) {
   if (m.type === "progress") {
     return (
       <div className="msg msg-fetchit">
-        <div className="avatar" aria-hidden="true">🐕</div>
+        <div className="avatar" aria-hidden="true">
+          <img src="/fetchit-logo.png" alt="" className="avatar-img" />
+        </div>
         <div className="bubble">
           <div className="progress"><div className="progress-fill"></div></div>
         </div>
@@ -123,7 +147,11 @@ function Message({ m, onBuy, onUpgrade }) {
   const isUser = m.sender === "user";
   return (
     <div className={`msg ${isUser ? "msg-user" : "msg-fetchit"}`}>
-      {!isUser && <div className="avatar" aria-hidden="true">🐕</div>}
+      {!isUser && (
+        <div className="avatar" aria-hidden="true">
+          <img src="/fetchit-logo.png" alt="" className="avatar-img" />
+        </div>
+      )}
       <div className="bubble">{m.text}</div>
     </div>
   );
@@ -149,12 +177,25 @@ function ChatPage() {
   const chatRef = useRef(null);
   const menuRef = useRef(null);
   const currentChatRef = useRef(null); // { id, title, createdAt }
-  const sessionRef = useRef(null); // active usage window { id, tokensUsed, sessionStart }
+  const sessionRef = useRef(null); // active 5-hour window { id, tokensUsed, sessionStart }
+  const weeklyRef = useRef(null); // active weekly window { id, tokensUsed, weekStart }
 
   // Protected route: must be logged in (once the session check resolves).
   useEffect(() => {
     if (!loading && !session) navigate("/login", { replace: true });
   }, [loading, session, navigate]);
+
+  // Lazy family disband: a family member whose owner cancelled Max and whose
+  // disband date has passed is finalized on app use — downgraded to Free and
+  // their membership removed (getPlan already reports Free; this persists it).
+  const lapseRef = useRef(false);
+  useEffect(() => {
+    if (lapseRef.current || !session) return;
+    if (familyDisbandDue(session)) {
+      lapseRef.current = true;
+      leaveFamily();
+    }
+  }, [session]);
 
   // Load this user's chat history.
   useEffect(() => {
@@ -173,13 +214,18 @@ function ChatPage() {
     return () => timers.forEach(clearTimeout);
   }, []);
 
-  // Prime the user's usage window (token limit tracking — invisible to the user).
-  // Skipped in incognito so nothing is written to Supabase.
+  // Prime the user's usage windows — the 5-hour session AND the weekly window
+  // (token limit tracking — invisible to the user). Skipped in incognito so
+  // nothing is written to Supabase.
   useEffect(() => {
     if (!email || incognito) return undefined;
     let active = true;
-    getOrCreateSession(getPlan(session)).then((s) => {
+    const plan = getPlan(session);
+    getOrCreateSession(plan).then((s) => {
       if (active) sessionRef.current = s;
+    });
+    getOrCreateWeeklyUsage(plan).then((w) => {
+      if (active) weeklyRef.current = w;
     });
     return () => {
       active = false;
@@ -251,39 +297,69 @@ function ChatPage() {
     }, reduced ? 0 : 4000);
   };
 
-  // Token/usage gate. Estimates the cost of this exchange, blocks if the window
-  // is exhausted, otherwise records the tokens. Returns { allowed, sess }.
-  // Fails open on a DB error (e.g. the sessions table isn't migrated yet) so
-  // chat still works. All of this is invisible to the user.
+  // Token/usage gate. Estimates the cost of this exchange and blocks if EITHER
+  // the 5-hour session window OR the weekly window is exhausted; otherwise records
+  // the tokens in both. Returns { allowed } or { allowed: false, reason, sess }.
+  // Fails open on a DB error (e.g. a table isn't migrated yet) so chat still
+  // works. All of this is invisible to the user.
   const consumeOrBlock = async (text) => {
     // getPlan() returns the real paid plan during a scheduled cancellation
     // (until plan_cancels_at), so a canceled-but-active user keeps their higher
     // token limit until the period actually ends.
     const plan = getPlan(session);
-    const limit = tokenLimit(plan);
+    const sessLimit = tokenLimit(plan);
+    const weekLimit = weeklyTokenLimit(plan);
+
+    // Refresh the 5-hour window (roll over if expired).
     let sess = sessionRef.current;
     if (!sess || isSessionExpired(sess)) {
       sess = await getOrCreateSession(plan);
       sessionRef.current = sess;
     }
-    if (!sess) return { allowed: true }; // no tracking available → don't block
-    if (sess.tokensUsed >= limit) return { allowed: false, sess };
+    // Refresh the weekly window (roll over after Monday).
+    let week = weeklyRef.current;
+    if (!week || isWeekExpired(week)) {
+      week = await getOrCreateWeeklyUsage(plan);
+      weeklyRef.current = week;
+    }
+
+    // No tracking available at all → don't block.
+    if (!sess && !week) return { allowed: true };
+
+    // Weekly cap is checked first — it's the longer, harder limit to recover from.
+    if (week && week.tokensUsed >= weekLimit) {
+      return { allowed: false, reason: "weekly" };
+    }
+    if (sess && sess.tokensUsed >= sessLimit) {
+      return { allowed: false, reason: "session", sess };
+    }
 
     const products = pickProducts(text);
     const cost =
       estimateTokens(text) +
       estimateTokens("Got it! Let me find the best options for you... 🔍") +
       products.reduce((s, p) => s + estimateTokens(`${p.name} ${p.desc}`), 0);
-    const total = await addSessionTokens(sess.id, sess.tokensUsed, cost);
-    sessionRef.current = { ...sess, tokensUsed: total };
+    if (sess) {
+      const total = await addSessionTokens(sess.id, sess.tokensUsed, cost);
+      sessionRef.current = { ...sess, tokensUsed: total };
+    }
+    if (week) {
+      const wTotal = await addWeeklyTokens(week.id, week.tokensUsed, cost);
+      weeklyRef.current = { ...week, tokensUsed: wTotal };
+    }
     return { allowed: true };
   };
 
-  const showLimitMessage = (sess) => {
+  const showLimitMessage = (gate) => {
     const next = NEXT_PLAN[getPlan(session)];
-    const resetText = formatResetIn(sess.sessionStart).text;
-    const pushLimit = () =>
-      add({ sender: "fetchit", type: "limit", resetText, next });
+    const pushLimit = () => {
+      if (gate.reason === "weekly") {
+        add({ sender: "fetchit", type: "limit", scope: "weekly", next });
+      } else {
+        const resetText = formatResetIn(gate.sess.sessionStart).text;
+        add({ sender: "fetchit", type: "limit", scope: "session", resetText, next });
+      }
+    };
     if (phase !== "chatting") {
       setPhase("chatting");
       schedule(pushLimit, prefersReduced() ? 0 : 50);
@@ -302,7 +378,7 @@ function ChatPage() {
     if (!incognito) {
       const gate = await consumeOrBlock(trimmed);
       if (!gate.allowed) {
-        showLimitMessage(gate.sess);
+        showLimitMessage(gate);
         return;
       }
     }
@@ -339,7 +415,14 @@ function ChatPage() {
     add({ sender: "user", type: "text", text: "Buy This 🐕" });
     add({ sender: "fetchit", type: "text", text: "🛒 Checking out in the background..." });
     if (!reduced) add({ sender: "fetchit", type: "progress" });
-    saveOrder({ productName: product.name, price: product.price });
+    saveOrder({
+      productName: product.name,
+      price: product.price,
+      productImage: product.emoji,
+      retailer: "Amazon",
+      category: product.category,
+      zincOrderId: `zinc_${makeId().replace(/-/g, "").slice(0, 12)}`,
+    });
     schedule(() => {
       removeType("progress");
       add({ sender: "fetchit", type: "text", text: `✅ Done! Your ${product.name} is ordered. Confirmation sent to your email.` });
@@ -398,6 +481,10 @@ function ChatPage() {
   const { firstName } = getName(session);
   const greeting = firstName ? `Hi, ${firstName} 👋` : email;
   const initial = (firstName || email || "?").charAt(0).toUpperCase();
+  // Family Sharing is visible to Max owners (manage the family) AND max_family
+  // members (see who they share with + Leave Family).
+  const userPlan = getPlan(session);
+  const showFamilySharing = userPlan === "Max" || userPlan === "max_family";
 
   return (
     <div className={`chat-shell${incognito ? " incognito" : ""}`}>
@@ -429,8 +516,7 @@ function ChatPage() {
               </button>
             )}
             <a href="/" className="logo">
-              <span className="logo-mark" role="img" aria-label="Fetchit dog">🐕</span>
-              <span className="logo-text">Fetchit</span>
+              <img src="/fetchit-logo.png" alt="FetchIt" className="logo-img" />
             </a>
             {incognito && <span className="incognito-badge">🕵️ Incognito Mode</span>}
           </div>
@@ -457,7 +543,21 @@ function ChatPage() {
                     <button role="menuitem" onClick={() => navigate("/account")}>
                       Account Settings
                     </button>
+                    <button role="menuitem" onClick={() => navigate("/cards-address")}>
+                      Cards &amp; Address
+                    </button>
+                    {showFamilySharing && (
+                      <button role="menuitem" onClick={() => navigate("/family-sharing")}>
+                        Family Sharing
+                      </button>
+                    )}
+                    <button role="menuitem" onClick={() => navigate("/orders")}>
+                      Orders &amp; Analytics
+                    </button>
                     <button role="menuitem" onClick={handleLogout}>Log Out</button>
+                    <button role="menuitem" onClick={() => navigate("/tos")}>
+                      Terms of Service
+                    </button>
                   </div>
                 )}
               </div>
@@ -474,7 +574,6 @@ function ChatPage() {
         <main className="chat-main">
           {phase !== "chatting" ? (
             <div className={`chat-empty${phase === "leaving" ? " is-leaving" : ""}`}>
-              <div className="chat-empty-dog" aria-hidden="true">🐕</div>
               <h1>What can we get you?</h1>
               <p>Describe anything — I&apos;ll find it, compare it, and buy it for you.</p>
               <div className="chat-chips">
@@ -507,12 +606,12 @@ function ChatPage() {
           }}
         >
           <label htmlFor="chat-input" className="visually-hidden">
-            Tell Fetchit what you need
+            Tell FetchIt what you need
           </label>
           <input
             id="chat-input"
             type="text"
-            placeholder="Tell Fetchit what you need..."
+            placeholder="Tell FetchIt what you need..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             autoComplete="off"

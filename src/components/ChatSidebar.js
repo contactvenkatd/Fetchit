@@ -36,10 +36,7 @@ function ChatSidebar({
     >
       <div className="sidebar-head">
         <a href="/" className="logo">
-          <span className="logo-mark" role="img" aria-label="Fetchit dog">
-            🐕
-          </span>
-          <span className="logo-text">Fetchit</span>
+          <img src="/fetchit-logo.png" alt="FetchIt" className="logo-img" />
         </a>
         <button className="new-chat-btn" onClick={onNewChat}>
           + New Chat

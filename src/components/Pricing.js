@@ -15,7 +15,7 @@ const PLANS = [
     name: "Free",
     monthly: 0,
     annual: 0,
-    blurb: "Try Fetchit's AI.",
+    blurb: "Try FetchIt's AI.",
     features: [
       "Auto checkout",
       "Full chat history",
@@ -89,7 +89,7 @@ function Pricing({ onSelect }) {
       <div className="container">
         <div className="section-head">
           <h2>Simple, Friendly Pricing</h2>
-          <p>Start free. Upgrade when Fetchit becomes your best friend.</p>
+          <p>Start free. Upgrade when FetchIt becomes your best friend.</p>
         </div>
 
         <div className="billing-toggle" role="group" aria-label="Billing period">

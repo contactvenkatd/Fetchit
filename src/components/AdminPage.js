@@ -29,10 +29,7 @@ function AdminPage() {
       <div className="admin-inner">
         <header className="admin-head">
           <a href="/" className="logo">
-            <span className="logo-mark" role="img" aria-label="Fetchit dog">
-              🐕
-            </span>
-            <span className="logo-text">Fetchit</span>
+            <img src="/fetchit-logo.png" alt="FetchIt" className="logo-img" />
           </a>
           <span className="admin-tag">Admin · Signups</span>
         </header>

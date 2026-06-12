@@ -1,6 +1,6 @@
 import "./Toast.css";
 
-const DEFAULT_MESSAGE = "Fetchit is on it! We'll be in touch soon.";
+const DEFAULT_MESSAGE = "FetchIt is on it! We'll be in touch soon.";
 
 function Toast({ visible, message = DEFAULT_MESSAGE }) {
   return (

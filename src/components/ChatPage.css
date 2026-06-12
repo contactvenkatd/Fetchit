@@ -7,7 +7,7 @@
   animation: route-fade 0.4s ease;
 }
 
-/* Session-limit message — a Fetchit bubble with a yellow accent + upgrade CTA.
+/* Session-limit message — a FetchIt bubble with a yellow accent + upgrade CTA.
    (Token counts are never shown; only this friendly reset/upgrade prompt.) */
 .bubble-limit {
   border-left: 3px solid var(--yellow);
@@ -203,10 +203,6 @@
 }
 .chat-empty.is-leaving {
   animation: chat-empty-out 0.3s ease forwards;
-}
-.chat-empty-dog {
-  font-size: 4rem;
-  margin-bottom: 0.6rem;
 }
 .chat-empty h1 {
   font-size: clamp(1.8rem, 4vw, 2.6rem);

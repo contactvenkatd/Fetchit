@@ -18,6 +18,12 @@
   box-shadow: 0 30px 70px rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.07);
 }
+/* View-only mock chat — no clicks, hover, focus, or buy/send interaction. The
+   conversation still auto-plays (that's not pointer interaction). */
+.browser-window.is-static {
+  pointer-events: none;
+  user-select: none;
+}
 .browser-bar {
   display: flex;
   align-items: center;
@@ -97,6 +103,13 @@
   display: grid;
   place-items: center;
   font-size: 1.1rem;
+  overflow: hidden;
+}
+/* FetchIt logo image used as the assistant's avatar (replaces the 🐕 emoji). */
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .bubble {
   background: #2a2a2a;

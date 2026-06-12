@@ -1,0 +1,125 @@
+/* Reusable reauthentication gate. Theme-aware so it sits correctly in both the
+   dark account pages (.reauth-dark) and the cream confirmation modals
+   (.reauth-light). */
+.reauth {
+  text-align: left;
+}
+.reauth-title {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 1.2rem;
+  margin-bottom: 0.3rem;
+  text-align: center;
+}
+.reauth-desc {
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 1.2rem;
+  text-align: center;
+}
+.reauth-google-note {
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 0.9rem;
+  text-align: center;
+}
+.reauth-error {
+  margin-top: 0.6rem;
+  text-align: center;
+}
+
+/* ---------- Password field ---------- */
+.reauth-field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 0.9rem;
+}
+.reauth-field label {
+  font-weight: 700;
+  font-size: 0.88rem;
+  margin-bottom: 0.4rem;
+}
+.reauth-pw-wrap {
+  position: relative;
+}
+.reauth-pw-wrap input {
+  width: 100%;
+  font-family: "Nunito", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.8rem 4rem 0.8rem 1rem;
+  border-radius: 14px;
+  outline: none;
+  border: 2px solid transparent;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.reauth-pw-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--orange);
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 8px;
+}
+.reauth-submit {
+  width: 100%;
+  margin-top: 0.3rem;
+}
+.reauth-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---------- Dark theme (account pages) ---------- */
+.reauth-dark .reauth-title {
+  color: var(--white);
+}
+.reauth-dark .reauth-desc,
+.reauth-dark .reauth-google-note {
+  color: rgba(255, 255, 255, 0.6);
+}
+.reauth-dark .reauth-field label {
+  color: rgba(255, 255, 255, 0.85);
+}
+.reauth-dark .reauth-field input {
+  background: #2a2a2a;
+  color: var(--white);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.reauth-dark .reauth-field input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+.reauth-dark .reauth-field input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.22);
+}
+.reauth-dark .reauth-pw-toggle:hover {
+  background: rgba(255, 107, 53, 0.14);
+}
+
+/* ---------- Light theme (modals) ---------- */
+.reauth-light .reauth-desc,
+.reauth-light .reauth-google-note {
+  color: var(--charcoal-soft);
+}
+.reauth-light .reauth-field input {
+  background: var(--cream);
+  color: var(--charcoal);
+  border-color: #e6e1cf;
+}
+.reauth-light .reauth-field input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.18);
+}
+.reauth-light .reauth-pw-toggle:hover {
+  background: var(--yellow-soft);
+}

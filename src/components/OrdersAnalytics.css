@@ -1,0 +1,322 @@
+/* Orders & Analytics — dark charcoal shell (shares .account-page / top bar with
+   AccountPage.css), yellow FetchIt accents. Two columns: spend analytics (left),
+   scrollable order history (right). */
+.oa-grid {
+  width: 100%;
+  max-width: 1040px;
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 1.6rem;
+  align-items: start;
+}
+
+.oa-heading {
+  font-family: "Baloo 2", sans-serif;
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 1.1rem;
+}
+
+/* ---------- LEFT: spend cards ---------- */
+.spend-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+  margin-bottom: 1.6rem;
+}
+.spend-card {
+  background: #1f1f1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 1.1rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.spend-card-label {
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 700;
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.spend-card-amount {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 1.7rem;
+  color: var(--white);
+}
+/* Accent the headline (Lifetime) card in FetchIt yellow. */
+.spend-card-lifetime {
+  border-color: var(--yellow);
+  background: linear-gradient(160deg, #2a2616, #1f1f1f 60%);
+}
+.spend-card-lifetime .spend-card-amount {
+  color: var(--yellow);
+}
+
+/* ---------- LEFT: category breakdown ---------- */
+.breakdown-panel {
+  background: #1f1f1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 1.2rem 1.3rem 1.3rem;
+}
+.breakdown-title {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+  margin-bottom: 0.9rem;
+}
+.breakdown-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 1.1rem;
+  flex-wrap: wrap;
+}
+.breakdown-tab {
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.breakdown-tab:hover {
+  color: var(--white);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.breakdown-tab.active {
+  background: var(--yellow);
+  border-color: var(--yellow);
+  color: var(--charcoal);
+}
+.breakdown-empty {
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 0.6rem 0;
+}
+.breakdown-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.9rem;
+}
+.breakdown-row-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-bottom: 0.35rem;
+}
+.breakdown-cat {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.breakdown-amt {
+  color: var(--white);
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+.breakdown-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.breakdown-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--orange), var(--yellow));
+  transition: width 0.3s ease;
+}
+
+/* ---------- RIGHT: scrollable order history ---------- */
+.oa-orders {
+  max-height: 640px;
+  overflow-y: auto;
+  padding-right: 0.4rem;
+}
+/* Slim themed scrollbar. */
+.oa-orders::-webkit-scrollbar {
+  width: 8px;
+}
+.oa-orders::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+}
+
+.orders-loading {
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+}
+
+/* ---------- Empty state ---------- */
+.orders-empty {
+  background: #1f1f1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  padding: 2.4rem 1.5rem;
+  text-align: center;
+}
+.orders-empty-dog {
+  font-size: 2.6rem;
+  line-height: 1;
+  margin-bottom: 0.8rem;
+}
+.orders-empty-title {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--white);
+  margin-bottom: 1.3rem;
+}
+
+/* ---------- Order cards (shared design) ---------- */
+.orders-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.9rem;
+}
+.order-card {
+  display: flex;
+  gap: 1rem;
+  background: #1f1f1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 1.1rem 1.2rem;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.order-card:hover {
+  border-color: rgba(255, 215, 0, 0.45);
+  transform: translateY(-2px);
+}
+.order-thumb {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  font-size: 1.7rem;
+  border-radius: 14px;
+  background: #2a2a2a;
+}
+.order-body {
+  flex: 1;
+  min-width: 0;
+}
+.order-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+.order-name {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--white);
+  margin: 0;
+}
+
+/* Status pill */
+.order-status {
+  flex-shrink: 0;
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.order-status-completed {
+  background: rgba(76, 175, 125, 0.18);
+  color: #6bd6a0;
+}
+.order-status-processing {
+  background: rgba(255, 215, 0, 0.18);
+  color: var(--yellow);
+}
+.order-status-pending {
+  background: rgba(255, 107, 53, 0.18);
+  color: var(--orange);
+}
+.order-status-failed {
+  background: rgba(229, 72, 77, 0.2);
+  color: #ff7a7a;
+}
+
+/* Meta line */
+.order-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+.order-meta span:not(:last-child)::after {
+  content: "·";
+  margin-left: 0.5rem;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* Prices */
+.order-prices {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+.order-price {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 1.15rem;
+  color: var(--yellow);
+}
+.order-fee {
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 700;
+  font-size: 0.82rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .order-card:hover {
+    transform: none;
+  }
+  .breakdown-bar-fill {
+    transition: none;
+  }
+}
+
+/* ---------- Responsive: stack columns ---------- */
+@media (max-width: 860px) {
+  .oa-grid {
+    grid-template-columns: 1fr;
+  }
+  .oa-orders {
+    max-height: 520px;
+  }
+}
+@media (max-width: 480px) {
+  .spend-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+  .order-meta span:not(:last-child)::after {
+    content: none;
+  }
+  .order-meta {
+    gap: 0.15rem 0.6rem;
+  }
+}

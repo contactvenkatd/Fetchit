@@ -1,0 +1,60 @@
+/* TOS agreement onboarding step — reuses .auth-card / .auth-btn (cream card). */
+.tos-agree-card {
+  text-align: center;
+}
+
+/* Key-points summary — bone-bulleted list, left-aligned. */
+.tos-points {
+  list-style: none;
+  margin: 0 0 1.4rem;
+  padding: 0;
+  text-align: left;
+  display: grid;
+  gap: 0.7rem;
+}
+.tos-points li {
+  position: relative;
+  padding-left: 1.8rem;
+  color: var(--charcoal);
+  font-weight: 600;
+  line-height: 1.45;
+}
+.tos-points li::before {
+  content: "🦴";
+  position: absolute;
+  left: 0;
+  top: 0;
+  font-size: 0.9rem;
+}
+
+.tos-read-link {
+  display: inline-block;
+  margin-bottom: 1.4rem;
+  color: var(--orange);
+  font-weight: 800;
+  text-decoration: underline;
+}
+.tos-read-link:hover {
+  color: var(--charcoal);
+}
+
+/* Agreement checkbox row. */
+.tos-agree-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  text-align: left;
+  margin-bottom: 1.4rem;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--charcoal);
+  line-height: 1.45;
+}
+.tos-agree-check input {
+  margin-top: 0.2rem;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  accent-color: var(--orange);
+  cursor: pointer;
+}

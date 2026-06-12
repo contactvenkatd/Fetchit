@@ -24,15 +24,33 @@ import AdminPage from "./components/AdminPage";
 import SignupPage from "./components/SignupPage";
 import LoginPage from "./components/LoginPage";
 import PlansPage from "./components/PlansPage";
+import TermsAgreementPage from "./components/TermsAgreementPage";
+import TosPage from "./components/TosPage";
 import CheckoutPage from "./components/CheckoutPage";
+import DeliveryPaymentPage from "./components/DeliveryPaymentPage";
 import OnboardingPage from "./components/OnboardingPage";
 import ResetPasswordPage from "./components/ResetPasswordPage";
 import ChatPage from "./components/ChatPage";
 import AccountPage from "./components/AccountPage";
+import CardsAddressPage from "./components/CardsAddressPage";
+import FamilySharingPage from "./components/FamilySharingPage";
+import JoinFamilyPage from "./components/JoinFamilyPage";
+import OrdersAnalytics from "./components/OrdersAnalytics";
+import AuthCallback from "./components/AuthCallback";
 import { AuthProvider, useAuth } from "./AuthContext";
-import { saveSignup, setPendingPlan, finalizePlan, hasPlan } from "./utils";
+import { supabase } from "./supabaseClient";
+import {
+  saveSignup,
+  setPendingPlan,
+  finalizePlan,
+  hasPlan,
+  planKey,
+  getPlan,
+  familyOwnerLabel,
+  SELF_LEFT_KEY,
+} from "./utils";
 
-const TOAST_MESSAGE = "Fetchit is on it! We'll be in touch soon.";
+const TOAST_MESSAGE = "FetchIt is on it! We'll be in touch soon.";
 
 // Captured synchronously at module load — Supabase's detectSessionInUrl strips
 // the auth params from the URL shortly after, so we read them first. Our own
@@ -70,6 +88,174 @@ function RecoveryHandler() {
     }
   }, [navigate]);
   return null;
+}
+
+// Global watcher: detect when a family member was removed by the owner (their
+// plan flips max_family → Free server-side) and show a one-time modal. The
+// member's local session doesn't update on its own, so we refreshSession() on
+// page load + tab focus/visibility (only while they're max_family) to pull the
+// fresh metadata, then compare against the last-known RAW plan.
+//   - RAW plan (planKey(metadata.plan)) is used, NOT getPlan() — so a *scheduled*
+//     disband (plan stays max_family, getPlan goes Free via family_disband_at) is
+//     NOT mistaken for a removal; that path finalizes itself via leaveFamily().
+//   - A self-initiated leave sets SELF_LEFT_KEY (utils.leaveFamily) → suppressed.
+//   - All baselines are keyed by USER ID (`fetchit_last_plan_<uid>` etc.) so they
+//     never cross users and DON'T need clearing on logout — a member removed while
+//     logged out still sees the modal on their next fresh sign-in (their persisted
+//     baseline is max_family, but the fresh session reports Free → transition).
+//   - `fetchit_plan_changed_<uid>` persists the pending modal so it shows once and
+//     survives a reload until the user dismisses it.
+const lastPlanKey = (uid) => `fetchit_last_plan_${uid}`;
+const lastOwnerKey = (uid) => `fetchit_last_owner_${uid}`;
+const planChangedKey = (uid) => `fetchit_plan_changed_${uid}`;
+const ls = {
+  get(k) {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  },
+  set(k, v) {
+    try {
+      localStorage.setItem(k, v);
+    } catch {
+      /* ignore */
+    }
+  },
+  del(k) {
+    try {
+      localStorage.removeItem(k);
+    } catch {
+      /* ignore */
+    }
+  },
+};
+
+function PlanChangeWatcher() {
+  const navigate = useNavigate();
+  const { session, loading } = useAuth();
+  const [removed, setRemoved] = useState(null); // { owner, key } | null
+  const lastRefreshRef = useRef(0);
+  const bootRef = useRef(false); // one-time page-load refresh for a family member
+  const sessionRef = useRef(session);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  // Detect the max_family → Free downgrade as the session settles / refreshes.
+  // Baselines + the pending modal are keyed by user id, so nothing is cleared on
+  // logout and a removal that happened while away is caught on next sign-in.
+  useEffect(() => {
+    if (loading) return;
+    if (!session) {
+      setRemoved(null); // hide the modal when logged out (keep the keyed baseline)
+      return;
+    }
+    const uid = session.user.id;
+    const meta = session.user.user_metadata || {};
+    const rawPlan = planKey(meta.plan); // raw metadata plan, not effective getPlan
+    const changedKey = planChangedKey(uid);
+
+    // Restore a pending modal persisted for THIS user (reload / re-login).
+    const pending = ls.get(changedKey);
+    if (pending) {
+      try {
+        const parsed = JSON.parse(pending);
+        setRemoved((r) => r || { owner: parsed.owner, key: changedKey });
+      } catch {
+        ls.del(changedKey);
+      }
+    }
+
+    const lastPlan = ls.get(lastPlanKey(uid));
+    ls.set(lastPlanKey(uid), rawPlan);
+    if (rawPlan === "max_family") ls.set(lastOwnerKey(uid), familyOwnerLabel(session));
+
+    // First sighting of a family-member session this mount → pull fresh metadata
+    // once (the cached JWT may pre-date a removal that happened while away).
+    if (rawPlan === "max_family" && !bootRef.current) {
+      bootRef.current = true;
+      const now = Date.now();
+      if (now - lastRefreshRef.current >= 5000) {
+        lastRefreshRef.current = now;
+        supabase.auth.refreshSession();
+      }
+    }
+
+    if (lastPlan === "max_family" && rawPlan === "Free") {
+      let selfLeft = false;
+      try {
+        selfLeft = sessionStorage.getItem(SELF_LEFT_KEY) === "1";
+      } catch {
+        /* ignore */
+      }
+      if (selfLeft) {
+        try {
+          sessionStorage.removeItem(SELF_LEFT_KEY);
+        } catch {
+          /* ignore */
+        }
+      } else {
+        const owner = ls.get(lastOwnerKey(uid)) || "your family plan owner";
+        ls.set(changedKey, JSON.stringify({ owner }));
+        setRemoved({ owner, key: changedKey });
+      }
+    }
+  }, [session, loading]);
+
+  // Pull fresh metadata on load + tab focus/visibility (only while max_family),
+  // so a removal done elsewhere is detected. Subscribes once; reads the live
+  // session via a ref. Throttled to once per 5s.
+  useEffect(() => {
+    const maybeRefresh = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      const s = sessionRef.current;
+      if (!s || getPlan(s) !== "max_family") return;
+      const now = Date.now();
+      if (now - lastRefreshRef.current < 5000) return;
+      lastRefreshRef.current = now;
+      supabase.auth.refreshSession();
+    };
+    document.addEventListener("visibilitychange", maybeRefresh);
+    window.addEventListener("focus", maybeRefresh);
+    return () => {
+      document.removeEventListener("visibilitychange", maybeRefresh);
+      window.removeEventListener("focus", maybeRefresh);
+    };
+  }, []);
+
+  const dismiss = () => {
+    if (removed && removed.key) ls.del(removed.key);
+    setRemoved(null);
+  };
+  const choosePlan = () => {
+    dismiss();
+    navigate("/plans", { state: { manage: true } });
+  };
+
+  if (!removed) return null;
+  return (
+    <div className="plan-modal-overlay" role="alertdialog" aria-modal="true" aria-labelledby="plan-removed-title">
+      <div className="plan-modal">
+        <div className="plan-modal-icon" aria-hidden="true">🐕</div>
+        <h2 id="plan-removed-title">You&apos;ve been removed from the family plan</h2>
+        <p>
+          You have been removed from <strong>{removed.owner}</strong>&apos;s family
+          plan. Your account has been moved to the Free plan. Would you like to
+          choose a new plan?
+        </p>
+        <div className="plan-modal-actions">
+          <button type="button" className="btn btn-primary" onClick={choosePlan}>
+            Choose a Plan
+          </button>
+          <button type="button" className="plan-modal-secondary" onClick={dismiss}>
+            Stay on Free
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // Route a pricing-card click based on login state. Free skips payment.
@@ -205,7 +391,11 @@ function RedirectIfAuthed({ children }) {
   // While a login is mid-email-confirmation, the password sign-in transiently
   // creates a session before we drop it — don't bounce to /chat in that window.
   const loginPending = sessionStorage.getItem("fetchit_login_pending");
-  if (session && !deletionPending && !loginPending) {
+  // A rejected Google OAuth (signup-exists / login-no-account) is signing the
+  // just-created session out while routing back to /signup or /login to show the
+  // message — don't bounce to /chat before that error renders.
+  const oauthError = sessionStorage.getItem("fetchit_oauth_error");
+  if (session && !deletionPending && !loginPending && !oauthError) {
     return <Navigate to="/chat" replace />;
   }
   return children;
@@ -232,6 +422,7 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <RecoveryHandler />
+        <PlanChangeWatcher />
         <Routes>
         <Route
           path="/"
@@ -265,11 +456,19 @@ function App() {
             </PlansGate>
           }
         />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/terms" element={<TermsAgreementPage />} />
+        <Route path="/tos" element={<TosPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
+        <Route path="/delivery-payment" element={<DeliveryPaymentPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/account" element={<AccountPage />} />
+        <Route path="/cards-address" element={<CardsAddressPage />} />
+        <Route path="/family-sharing" element={<FamilySharingPage />} />
+        <Route path="/join-family" element={<JoinFamilyPage />} />
+        <Route path="/orders" element={<OrdersAnalytics />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route
           path="*"

@@ -235,6 +235,17 @@
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* Family member: "shared by …" note + Leave Family button. */
+.fam-shared-note {
+  margin-bottom: 0.9rem;
+}
+.fam-shared-note strong {
+  color: rgba(255, 255, 255, 0.85);
+}
+.leave-family-btn {
+  width: 100%;
+}
+
 .cancel-sub-link {
   display: inline-block;
   margin-top: 0.8rem;
@@ -293,6 +304,16 @@
 }
 .cancel-actions .danger-btn-solid {
   margin-top: 0;
+}
+
+/* Google-only account note in place of the change-password form. */
+.google-managed-note {
+  background: #2a2a2a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 0;
+  line-height: 1.5;
 }
 
 /* ---------- Password strength meter ---------- */

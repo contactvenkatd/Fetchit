@@ -3,18 +3,18 @@ import "./HowItWorks.css";
 const STEPS = [
   {
     emoji: "💬",
-    title: "Chat with Fetchit AI",
-    text: "Describe what you need in plain English. Fetchit asks smart follow-up questions to nail down exactly what you want.",
+    title: "Chat with FetchIt AI",
+    text: "Describe what you need in plain English. FetchIt asks smart follow-up questions to nail down exactly what you want.",
   },
   {
     emoji: "🛍️",
     title: "Pick from AI-Curated Recommendations",
-    text: "Fetchit surfaces the best matching products with real reviews, photos, and prices. You choose what you like.",
+    text: "FetchIt surfaces the best matching products with real reviews, photos, and prices. You choose what you like.",
   },
   {
     emoji: "🛒",
-    title: "Fetchit Buys It For You",
-    text: "Click buy. Fetchit handles the checkout automatically in the background. You get a confirmation.",
+    title: "FetchIt Buys It For You",
+    text: "Click buy. FetchIt handles the checkout automatically in the background. You get a confirmation.",
   },
 ];
 

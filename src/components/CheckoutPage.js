@@ -16,6 +16,7 @@ import {
   detectPlanChange,
   cancelStripeSubscriptions,
   sendPlanEmail,
+  disbandFamily,
 } from "../utils";
 import {
   stripePromise,
@@ -80,7 +81,7 @@ function CheckoutForm({ plan }) {
   useEffect(() => {
     if (done) {
       const id = setTimeout(
-        () => navigate("/onboarding"),
+        () => navigate("/delivery-payment"),
         prefersReduced() ? 300 : 2000
       );
       if (successRef.current) successRef.current.focus();
@@ -153,8 +154,12 @@ function CheckoutForm({ plan }) {
         });
       }
 
+      // Moving OFF Max (to Plus/Pro) tears down the family — downgrade + notify
+      // every member.
+      if (change.fromPlan === "Max" && plan.name !== "Max") disbandFamily();
+
       // 5. Send the matching confirmation email. Upgrade reuses the purchase
-      //    "Welcome to Fetchit <Plan>!" template; downgrade / billing switch
+      //    "Welcome to FetchIt <Plan>!" template; downgrade / billing switch
       //    have their own.
       const emailType =
         change.type === "downgrade"
@@ -188,7 +193,7 @@ function CheckoutForm({ plan }) {
         </div>
         <h1>You&apos;re all set! 🐕</h1>
         <p className="auth-sub">
-          Welcome to Fetchit {plan.name}. Just one more step…
+          Welcome to FetchIt {plan.name}. Just one more step…
         </p>
       </div>
     );
@@ -230,7 +235,7 @@ function CheckoutForm({ plan }) {
       </div>
 
       <div className="checkout-summary">
-        <span className="cs-plan">Fetchit {plan.name}</span>
+        <span className="cs-plan">FetchIt {plan.name}</span>
         <span className="cs-price">{priceLabel}</span>
       </div>
       <p className="co-billing-note">{billingNote}</p>
@@ -307,7 +312,7 @@ function CheckoutForm({ plan }) {
           className="btn btn-primary auth-btn"
           disabled={!stripe || processing}
         >
-          {processing ? "Processing…" : `Start Fetchit ${plan.name}`}
+          {processing ? "Processing…" : `Start FetchIt ${plan.name}`}
         </button>
 
         <p className="checkout-policy">
@@ -326,10 +331,12 @@ function CheckoutPage() {
   const location = useLocation();
   const plan = location.state && location.state.plan;
 
-  // No plan in nav state → back to plan selection. Free needs no payment.
+  // No plan in nav state → back to plan selection. Free needs no payment, so it
+  // jumps straight to the Delivery & Payment step.
   useEffect(() => {
     if (!plan) navigate("/plans", { replace: true });
-    else if (plan.name === "Free") navigate("/onboarding", { replace: true });
+    else if (plan.name === "Free")
+      navigate("/delivery-payment", { replace: true });
   }, [plan, navigate]);
 
   if (!plan || plan.name === "Free") return null;

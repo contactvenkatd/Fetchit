@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import AuthLayout from "./AuthLayout";
+import GoogleButton from "./GoogleButton";
 import { supabase } from "../supabaseClient";
 import {
   signIn,
@@ -13,6 +14,10 @@ import {
   hasPlan,
   sendLoginOtp,
   verifyLoginOtp,
+  signInWithGoogle,
+  OAUTH_ERROR_KEY,
+  getFamilyInviteToken,
+  maybeAcceptPendingInvite,
 } from "../utils";
 import "./LoginPage.css";
 
@@ -30,6 +35,8 @@ function LoginPage() {
   const [show, setShow] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const [noAccount, setNoAccount] = useState(false); // Google login, no account
 
   // Email-confirmation (reauthentication code) sub-state, after a valid password.
   const [otpSent, setOtpSent] = useState(false);
@@ -51,6 +58,26 @@ function LoginPage() {
   useEffect(() => {
     if (emailRef.current) emailRef.current.focus();
   }, []);
+
+  // Returned from /auth/callback after Google OAuth found no FetchIt account.
+  useEffect(() => {
+    if (sessionStorage.getItem(OAUTH_ERROR_KEY) === "login_noaccount") {
+      sessionStorage.removeItem(OAUTH_ERROR_KEY);
+      setNoAccount(true);
+    }
+  }, []);
+
+  const handleGoogle = async () => {
+    setError("");
+    setNoAccount(false);
+    setGoogleBusy(true);
+    const { error: oauthError } = await signInWithGoogle("login");
+    // On success the browser redirects to Google; we only reach here on failure.
+    if (oauthError) {
+      setGoogleBusy(false);
+      setError(oauthError.message || "Couldn't start Google sign-in.");
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -91,13 +118,21 @@ function LoginPage() {
   // the synchronous step immediately before each navigate.
   const finishLogin = async (verifiedSession) => {
     const session = verifiedSession || (await getSession());
+    // Logged in via a family join link → accept the invite (sets max_family) and
+    // go straight to chat, bypassing plan routing.
+    if (getFamilyInviteToken()) {
+      await maybeAcceptPendingInvite();
+      sessionStorage.removeItem("fetchit_login_pending");
+      navigate("/chat");
+      return;
+    }
     const pending = getPendingPlan();
     if (pending) {
       clearPendingPlan();
       if (pending.name === "Free") {
         await finalizePlan("Free");
         sessionStorage.removeItem("fetchit_login_pending");
-        navigate("/onboarding");
+        navigate("/delivery-payment");
       } else {
         sessionStorage.removeItem("fetchit_login_pending");
         navigate("/checkout", { state: { plan: pending } });
@@ -330,6 +365,17 @@ function LoginPage() {
         </button>
         <h1>Welcome back</h1>
         <p className="auth-sub">Sign in to keep fetching.</p>
+
+        <GoogleButton onClick={handleGoogle} disabled={googleBusy} />
+
+        {noAccount && (
+          <p className="field-error" role="alert">
+            No account found with this Google account.{" "}
+            <Link to="/signup">Please sign up instead.</Link>
+          </p>
+        )}
+
+        <div className="auth-divider">or</div>
 
         <form onSubmit={handleSubmit} noValidate>
           <div className="auth-field">

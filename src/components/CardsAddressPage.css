@@ -1,0 +1,138 @@
+/* Cards & Address — dark charcoal shell (shares .account-page / top bar /
+   .account-card / .account-field with AccountPage.css), yellow accents. */
+
+/* ---------- Reauthentication wall ---------- */
+.ca-lock-card {
+  text-align: center;
+  max-width: 440px;
+}
+.ca-lock-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  margin-bottom: 0.6rem;
+}
+.ca-lock-card h2 {
+  font-family: "Baloo 2", sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  margin-bottom: 0.3rem;
+}
+.ca-lock-sub {
+  margin-bottom: 1.4rem;
+}
+.ca-lock-card form {
+  text-align: left;
+}
+
+/* Password input + show/hide toggle (dark). */
+.ca-pw-wrap {
+  position: relative;
+}
+.ca-pw-wrap input {
+  padding-right: 4rem;
+}
+.ca-pw-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.6rem;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--orange);
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 8px;
+}
+.ca-pw-toggle:hover {
+  background: rgba(255, 107, 53, 0.14);
+}
+
+.ca-loading {
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+}
+
+/* ---------- Saved card row ---------- */
+.ca-card-row {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  background: #2a2a2a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1rem;
+}
+.ca-card-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+.ca-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.ca-card-brand {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--white);
+  letter-spacing: 0.04em;
+}
+.ca-card-exp {
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.ca-no-card {
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+  margin-bottom: 1rem;
+}
+.ca-update-btn {
+  width: 100%;
+}
+
+/* ---------- Update-card sub-form ---------- */
+.ca-card-form {
+  margin-top: 0.6rem;
+}
+/* Stripe Element wrappers, dark variant of CheckoutPage's .stripe-input. */
+.ca-stripe-input {
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 0.8rem 0.95rem;
+  background: #2a2a2a;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ca-stripe-input.StripeElement--focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.22);
+}
+.ca-stripe-input.StripeElement--invalid {
+  border-color: #ff7a7a;
+}
+.ca-stripe-note {
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  margin: 0.2rem 0 1rem;
+}
+.ca-stripe-note code {
+  font-family: "Nunito", monospace;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.05rem 0.35rem;
+  border-radius: 6px;
+  font-weight: 800;
+}
+.ca-card-actions {
+  display: flex;
+  gap: 0.7rem;
+}
+.ca-card-actions .btn {
+  flex: 1;
+}

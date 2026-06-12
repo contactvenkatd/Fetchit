@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Toast from "./Toast";
+import ReauthGate from "./ReauthGate";
 import { useAuth } from "../AuthContext";
 import {
   getName,
@@ -8,14 +9,20 @@ import {
   requestPasswordChange,
   resendPasswordChangeEmail,
   applyNewPassword,
-  verifyPassword,
   sendAccountDeletionEmail,
   deleteAccount,
   verifyDeleteToken,
   clearDeleteToken,
+  isGoogleUser,
+  consumeReauthResult,
   getPlan,
   getPlanBilling,
   planUsageLabel,
+  planDisplayName,
+  familyOwnerLabel,
+  familyDisbandAt,
+  familyDisbandDue,
+  leaveFamily,
   nextBillingDate,
   cancelSubscription,
   reactivateSubscription,
@@ -98,10 +105,6 @@ function AccountPage() {
   const [delSending, setDelSending] = useState(false);
   // null | "verify" | "warn" | "final"
   const [deleteStep, setDeleteStep] = useState(null);
-  const [verifyPw, setVerifyPw] = useState("");
-  const [showVerifyPw, setShowVerifyPw] = useState(false);
-  const [verifyError, setVerifyError] = useState("");
-  const [verifying, setVerifying] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const [deleting, setDeleting] = useState(false);
 
@@ -110,6 +113,10 @@ function AccountPage() {
   const [canceling, setCanceling] = useState(false);
   const [reactivating, setReactivating] = useState(false);
 
+  // Family-member "Leave Family" confirmation.
+  const [leaveOpen, setLeaveOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+
   const [toast, setToast] = useState({ visible: false, message: "" });
   const toastTimer = useRef(null);
   // Set once the account is deleted, so the "not signed in → /login" guard below
@@ -117,6 +124,10 @@ function AccountPage() {
   const deletedRef = useRef(false);
   // Ensures the deletion-link token is verified at most once.
   const deletionLinkRef = useRef(false);
+  // Ensures a returned Google reauth resumes the deletion email at most once.
+  const reauthResumeRef = useRef(false);
+  // Ensures a lapsed family member is finalized at most once.
+  const lapseRef = useRef(false);
 
   const showToast = useCallback((message) => {
     setToast({ visible: true, message });
@@ -126,6 +137,22 @@ function AccountPage() {
       3000
     );
   }, []);
+
+  // Close the delete verify modal and send the deletion confirmation email. The
+  // shared post-verify action — called by the password path (ReauthGate
+  // onVerified) AND, after a Google reauth round-trip, by the resume effect.
+  const beginAccountDeletionEmail = useCallback(async () => {
+    setDeleteStep(null);
+    setDelSending(true);
+    const { error: sendErr, email: addr } = await sendAccountDeletionEmail();
+    setDelSending(false);
+    if (sendErr) {
+      showToast("Couldn't send the email — try again.");
+      return;
+    }
+    setDelSentTo(addr || "");
+    setDelEmailSent(true);
+  }, [showToast]);
 
   // Protected: must be signed in. Skipped during account deletion — the session
   // is being cleared and we redirect to "/" ourselves, so don't bounce to /login.
@@ -174,18 +201,47 @@ function AccountPage() {
     }
   }, [loading, session, showToast]);
 
+  // Returning from a Google reauthentication redirect (deletion) → resume the
+  // deletion email send that the reauth was gating.
+  useEffect(() => {
+    if (loading || !session || reauthResumeRef.current) return;
+    if (consumeReauthResult("delete-account")) {
+      reauthResumeRef.current = true;
+      beginAccountDeletionEmail();
+    }
+  }, [loading, session, beginAccountDeletionEmail]);
+
+  // Lazy family disband: finalize a lapsed family member here too (not just on
+  // chat visits) — downgrade to Free + remove their membership row.
+  useEffect(() => {
+    if (lapseRef.current || !session) return;
+    if (familyDisbandDue(session)) {
+      lapseRef.current = true;
+      leaveFamily();
+    }
+  }, [session]);
+
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   if (loading || !session) return null;
 
   const email = session.user.email;
+  // Google-only users have no password — show a managed message instead of the
+  // change-password form, and "Verify with Google" in any reauth gate.
+  const googleUser = isGoogleUser(session);
 
   // ----- Current plan (for the "Your Plan" card) -----
-  const plan = getPlan(session); // Free | Plus | Pro | Max (honors grace period)
-  const isPaid = plan !== "Free";
+  const plan = getPlan(session); // Free | Plus | Pro | Max | max_family
+  const familyMember = plan === "max_family"; // on someone else's Max plan
+  // A family member has Max-level access but no subscription of their own.
+  const isPaid = plan !== "Free" && !familyMember;
+  const familyOwner = familyMember ? familyOwnerLabel(session) : null;
+  const famDisbandDate = familyMember ? familyDisbandAt(session) : null;
   const planBilling = getPlanBilling(session);
   const priceText =
-    plan === "Free" ? "$0/mo" : `$${money(monthlyDisplay(plan, planBilling))}/mo`;
+    plan === "Free" || familyMember
+      ? "$0/mo"
+      : `$${money(monthlyDisplay(plan, planBilling))}/mo`;
   const usageLabel = planUsageLabel(plan);
   const nextBill = nextBillingDate(session);
   const nextBillText = nextBill ? formatDate(nextBill) : null;
@@ -206,6 +262,18 @@ function AccountPage() {
     // Plan stays active until the period ends; the card now shows "Cancels on…"
     // once the session metadata refreshes (USER_UPDATED → AuthContext).
     showToast("Subscription canceled — you keep access until your period ends 🐕");
+  };
+
+  const handleLeaveFamily = async () => {
+    setLeaving(true);
+    const { error } = await leaveFamily();
+    setLeaving(false);
+    if (error) {
+      showToast(error.message || "Couldn't leave the family — try again.");
+      return;
+    }
+    setLeaveOpen(false);
+    navigate("/plans", { state: { manage: true } });
   };
 
   const handleReactivate = async () => {
@@ -292,33 +360,6 @@ function AccountPage() {
     showToast("Password updated! 🐕");
   };
 
-  // Step 1: verify the password, then send the deletion confirmation email.
-  const handleVerifyAndSend = async (e) => {
-    e.preventDefault();
-    setVerifyError("");
-    setVerifying(true);
-    const { error } = await verifyPassword(verifyPw);
-    if (error) {
-      setVerifying(false);
-      setVerifyError(error.message || "Incorrect password");
-      return;
-    }
-    // Verified → close the verify modal, then email the confirmation link.
-    setVerifying(false);
-    setDeleteStep(null);
-    setVerifyPw("");
-    setShowVerifyPw(false);
-    setDelSending(true);
-    const { error: sendErr, email: addr } = await sendAccountDeletionEmail();
-    setDelSending(false);
-    if (sendErr) {
-      showToast("Couldn't send the email — try again.");
-      return;
-    }
-    setDelSentTo(addr || email);
-    setDelEmailSent(true);
-  };
-
   const handleResendDelete = async () => {
     setDelSending(true);
     const { error } = await sendAccountDeletionEmail();
@@ -333,9 +374,6 @@ function AccountPage() {
   const closeDeleteModals = () => {
     setDeleteStep(null);
     setConfirmText("");
-    setVerifyPw("");
-    setVerifyError("");
-    setShowVerifyPw(false);
   };
 
   // Final step: actually delete, then redirect home with a flash message.
@@ -375,10 +413,7 @@ function AccountPage() {
           </svg>
         </button>
         <span className="logo">
-          <span className="logo-mark" role="img" aria-label="Fetchit dog">
-            🐕
-          </span>
-          <span className="logo-text">Fetchit</span>
+          <img src="/fetchit-logo.png" alt="FetchIt" className="logo-img" />
         </span>
         <span className="account-topbar-title">Account Settings</span>
       </header>
@@ -388,10 +423,12 @@ function AccountPage() {
           {/* ---------- Your Plan ---------- */}
           <section className="account-section">
             <h2>Your Plan</h2>
-            <div className={`plan-card plan-card-${plan.toLowerCase()}`}>
+            <div className={`plan-card plan-card-${familyMember ? "max" : plan.toLowerCase()}`}>
               <div className="plan-card-head">
-                <span className="plan-card-name">{plan}</span>
-                {canceled && cancelDateText ? (
+                <span className="plan-card-name">{planDisplayName(plan)}</span>
+                {familyMember ? (
+                  <span className="plan-card-badge best">Family</span>
+                ) : canceled && cancelDateText ? (
                   <span className="plan-card-badge canceled">
                     Cancels on {cancelDateText}
                   </span>
@@ -410,6 +447,12 @@ function AccountPage() {
               <ul className="plan-card-meta">
                 <li>{usageLabel}</li>
                 <li>Sessions reset every 5 hours</li>
+                {familyMember &&
+                  (famDisbandDate ? (
+                    <li>Access ends {formatDate(famDisbandDate)}</li>
+                  ) : (
+                    <li>Covered by your family plan</li>
+                  ))}
                 {!canceled && nextBillText && (
                   <li>Next billing date: {nextBillText}</li>
                 )}
@@ -429,14 +472,31 @@ function AccountPage() {
                   </p>
                 )
               )}
-              <button
-                type="button"
-                className={`btn plan-change-btn${plan === "Max" ? " manage" : ""}`}
-                // state.manage lets /plans show even though the user has a plan.
-                onClick={() => navigate("/plans", { state: { manage: true } })}
-              >
-                {plan === "Max" ? "Manage Plan" : "Upgrade Plan"}
-              </button>
+              {familyMember ? (
+                <>
+                  <p className="plan-card-policy fam-shared-note">
+                    You&apos;re on a family plan shared by{" "}
+                    <strong>{familyOwner}</strong>. To manage your plan, ask the
+                    plan owner or leave the family.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn plan-change-btn manage leave-family-btn"
+                    onClick={() => setLeaveOpen(true)}
+                  >
+                    Leave Family
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className={`btn plan-change-btn${plan === "Max" ? " manage" : ""}`}
+                  // state.manage lets /plans show even though the user has a plan.
+                  onClick={() => navigate("/plans", { state: { manage: true } })}
+                >
+                  {plan === "Max" ? "Manage Plan" : "Upgrade Plan"}
+                </button>
+              )}
             </div>
             {isPaid &&
               (canceled ? (
@@ -506,7 +566,13 @@ function AccountPage() {
           <section className="account-section">
             <h2>Change password</h2>
 
-            {recovering ? (
+            {googleUser ? (
+              /* Google-only account — no password to change. */
+              <p className="account-section-sub google-managed-note">
+                Your account uses Google Sign-In. Password changes are managed
+                through your Google account.
+              </p>
+            ) : recovering ? (
               /* Step 2: arrived from the email link — finish the change. */
               <form onSubmit={handleConfirmNewPassword} noValidate>
                 <div className="pw-recovery-banner" role="status">
@@ -668,12 +734,13 @@ function AccountPage() {
         </div>
       </main>
 
-      {/* Step 1 — verify password before any email is sent. */}
+      {/* Step 1 — confirm identity (password OR Google) before any email is
+          sent. ReauthGate branches on the user's provider. */}
       {deleteStep === "verify" && (
         <div
           className="modal-overlay delete-overlay"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget && !verifying) closeDeleteModals();
+            if (e.target === e.currentTarget) closeDeleteModals();
           }}
         >
           <div
@@ -683,53 +750,18 @@ function AccountPage() {
             aria-labelledby="verify-title"
           >
             <h2 id="verify-title">Verify it&apos;s you</h2>
-            <p className="modal-sub">Enter your password to continue.</p>
-            <form onSubmit={handleVerifyAndSend} noValidate>
-              <div className="verify-pw-wrap">
-                <input
-                  type={showVerifyPw ? "text" : "password"}
-                  className="verify-input"
-                  placeholder="Your password"
-                  value={verifyPw}
-                  onChange={(e) => {
-                    setVerifyPw(e.target.value);
-                    if (verifyError) setVerifyError("");
-                  }}
-                  autoComplete="current-password"
-                  aria-invalid={!!verifyError}
-                  aria-describedby={verifyError ? "verify-err" : undefined}
-                  // eslint-disable-next-line jsx-a11y/no-autofocus
-                  autoFocus
-                  disabled={verifying}
-                />
-                <button
-                  type="button"
-                  className="verify-pw-toggle"
-                  onClick={() => setShowVerifyPw((v) => !v)}
-                  aria-pressed={showVerifyPw}
-                  aria-label={showVerifyPw ? "Hide password" : "Show password"}
-                >
-                  {showVerifyPw ? "Hide" : "Show"}
-                </button>
-              </div>
-              {verifyError && (
-                <p className="field-error" id="verify-err" role="alert">
-                  {verifyError}
-                </p>
-              )}
-              <button
-                type="submit"
-                className="btn delete-keep-btn verify-continue"
-                disabled={verifying || !verifyPw}
-              >
-                {verifying ? "Checking…" : "Continue"}
-              </button>
-            </form>
+            <ReauthGate
+              purpose="delete-account"
+              returnTo="/account"
+              theme="light"
+              description="Confirm your identity to continue deleting your account."
+              submitLabel="Continue"
+              onVerified={beginAccountDeletionEmail}
+            />
             <button
               type="button"
               className="modal-cancel"
               onClick={closeDeleteModals}
-              disabled={verifying}
             >
               Cancel
             </button>
@@ -801,7 +833,7 @@ function AccountPage() {
             <h2 id="del-final-title">Final confirmation</h2>
             <p className="modal-sub">
               Type <strong>DELETE</strong> to confirm you want to permanently
-              delete your Fetchit account.
+              delete your FetchIt account.
             </p>
             <input
               type="text"
@@ -852,7 +884,7 @@ function AccountPage() {
             <p className="modal-sub">
               {nextBillText ? (
                 <>
-                  You&apos;ll keep access to Fetchit {plan} until{" "}
+                  You&apos;ll keep access to FetchIt {plan} until{" "}
                   <strong>{nextBillText}</strong>.
                 </>
               ) : (
@@ -860,7 +892,7 @@ function AccountPage() {
               )}
             </p>
             <p className="cancel-policy">
-              No refund will be issued. You will keep full access to Fetchit{" "}
+              No refund will be issued. You will keep full access to FetchIt{" "}
               {plan} until the end of your current billing period. Your plan does
               not change until your billing period ends
               {nextBillText ? <> — {nextBillText}</> : null}.
@@ -881,6 +913,44 @@ function AccountPage() {
                 disabled={canceling}
               >
                 {canceling ? "Canceling…" : "Cancel subscription"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Leave-family confirmation (max_family members). */}
+      {leaveOpen && (
+        <div
+          className="modal-overlay delete-overlay"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !leaving) setLeaveOpen(false);
+          }}
+        >
+          <div
+            className="modal cancel-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="leave-title"
+          >
+            <h2 id="leave-title">Are you sure?</h2>
+            <p className="modal-sub">You&apos;ll be moved to the Free plan.</p>
+            <div className="cancel-actions">
+              <button
+                type="button"
+                className="btn delete-keep-btn"
+                onClick={() => setLeaveOpen(false)}
+                disabled={leaving}
+              >
+                Keep family plan
+              </button>
+              <button
+                type="button"
+                className="danger-btn danger-btn-solid"
+                onClick={handleLeaveFamily}
+                disabled={leaving}
+              >
+                {leaving ? "Leaving…" : "Leave family"}
               </button>
             </div>
           </div>

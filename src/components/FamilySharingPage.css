@@ -1,0 +1,157 @@
+/* Family Sharing — dark charcoal shell (shares .account-page / top bar with
+   AccountPage.css), yellow accents. */
+.fam-wrap {
+  width: 100%;
+  max-width: 620px;
+}
+.fam-head h1 {
+  font-family: "Baloo 2", sans-serif;
+  font-size: 1.6rem;
+  font-weight: 800;
+  margin-bottom: 0.3rem;
+}
+.fam-head p {
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-bottom: 1.6rem;
+}
+
+.fam-slots {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.9rem;
+}
+.fam-slot {
+  background: #1f1f1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 1rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.fam-slot.filled {
+  border-color: rgba(255, 215, 0, 0.35);
+}
+.fam-slot-label {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.fam-slot-body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.fam-slot-member {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.fam-slot-email {
+  color: var(--white);
+  font-weight: 700;
+  font-size: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fam-slot-status {
+  font-weight: 800;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.fam-status-accepted {
+  color: #6bd6a0;
+}
+.fam-status-pending {
+  color: var(--yellow);
+}
+.fam-slot-empty {
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 700;
+  font-style: italic;
+}
+
+.fam-invite-btn {
+  flex-shrink: 0;
+  padding: 0.5rem 1.4rem;
+  font-size: 0.9rem;
+}
+.fam-remove-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1.5px solid rgba(255, 107, 107, 0.5);
+  color: #ff7a7a;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.fam-remove-btn:hover:not(:disabled) {
+  background: rgba(255, 107, 107, 0.12);
+}
+.fam-remove-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---------- Non-Max gate ---------- */
+.fam-gate {
+  max-width: 460px;
+  text-align: center;
+}
+.fam-gate-icon {
+  font-size: 2.6rem;
+  line-height: 1;
+  margin-bottom: 0.6rem;
+}
+.fam-gate h2 {
+  font-family: "Baloo 2", sans-serif;
+  font-size: 1.35rem;
+  font-weight: 800;
+  margin-bottom: 0.4rem;
+}
+.fam-gate .account-section-sub {
+  margin-bottom: 1.4rem;
+}
+
+/* ---------- Invite modal ---------- */
+.fam-modal {
+  text-align: center;
+}
+.fam-invite-input {
+  width: 100%;
+  font-family: "Nunito", sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.8rem 1rem;
+  border: 2px solid #e6e1cf;
+  border-radius: 14px;
+  background: var(--cream);
+  color: var(--charcoal);
+  outline: none;
+  margin: 0.4rem 0 0.2rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.fam-invite-input:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.18);
+}
+.fam-modal-send {
+  width: 100%;
+  margin-top: 1rem;
+}

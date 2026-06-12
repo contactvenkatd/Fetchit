@@ -1,0 +1,45 @@
+/* Join-family invite landing — reuses .auth-card (cream card on dark page). */
+.jf-card {
+  text-align: center;
+}
+.jf-card h1 {
+  font-size: 1.45rem;
+  line-height: 1.3;
+}
+.jf-icon {
+  font-size: 2.8rem;
+  line-height: 1;
+  margin-bottom: 0.6rem;
+}
+.jf-secondary {
+  margin-top: 0.7rem;
+}
+
+/* Logged-in avatar (Google picture or initials). */
+.jf-avatar {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 0.7rem;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--yellow);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+.jf-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.jf-avatar-initial {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 2rem;
+  color: var(--charcoal);
+}
+.jf-you {
+  font-weight: 800;
+  color: var(--charcoal);
+  margin-bottom: 1rem;
+}

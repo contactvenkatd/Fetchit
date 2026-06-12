@@ -1,0 +1,28 @@
+/* Delivery & Payment onboarding step — reuses .auth-card / .auth-field (cream
+   inputs) and CheckoutPage.css for the Stripe inputs. */
+.dp-card {
+  text-align: center;
+}
+.dp-card form {
+  text-align: left;
+  margin-top: 0.6rem;
+}
+
+/* Two fields side by side (City/State, ZIP/Country) — stack on narrow screens. */
+.dp-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+/* City gets more room than the short state field. */
+.dp-row-city {
+  grid-template-columns: 2fr 1fr;
+}
+
+@media (max-width: 480px) {
+  .dp-row,
+  .dp-row-city {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}

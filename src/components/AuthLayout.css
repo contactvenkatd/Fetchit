@@ -27,6 +27,11 @@
 .auth-logo {
   margin-bottom: 1.6rem;
 }
+/* Auth / onboarding pages have room for a slightly larger brand mark. */
+.auth-logo .logo-img {
+  height: 56px;
+  border-radius: 16px;
+}
 .auth-logo .logo-text {
   color: var(--white);
 }

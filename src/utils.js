@@ -52,9 +52,9 @@ export async function signUp(email, password) {
   return supabase.auth.signUp({
     email: email.trim(),
     password,
-    // Confirmation link returns to /plans, where the just-verified (plan-less)
-    // user picks a plan. detectSessionInUrl signs them in on arrival.
-    options: { emailRedirectTo: `${window.location.origin}/plans` },
+    // Confirmation link returns to /terms (the TOS agreement step), which leads
+    // to /plans. detectSessionInUrl signs them in on arrival.
+    options: { emailRedirectTo: `${window.location.origin}/terms` },
   });
 }
 
@@ -64,6 +64,162 @@ export async function signIn(email, password) {
 
 export async function signOut() {
   return supabase.auth.signOut();
+}
+
+// ---------------------------------------------------------------------------
+// Google OAuth. The same provider sign-in backs both "Sign up with Google" and
+// "Log in with Google" — Supabase auto-creates the account on first sign-in, so
+// we can't ask it to "sign up only" vs "log in only". Instead we:
+//   1. stash the user's INTENT (signup | login) before redirecting to Google,
+//      and read it back in the /auth/callback handler after the round-trip;
+//   2. track a `fetchit_registered` flag in user_metadata that WE set the first
+//      time someone completes the Google signup step. That flag — not mere
+//      existence in auth.users — is our source of truth for "has an account",
+//      so a brand-new account auto-created by an accidental "Log in with Google"
+//      stays un-registered (no deadlock: a later signup still proceeds).
+// AuthCallback (src/components/AuthCallback.js) routes on { intent, registered }.
+// ---------------------------------------------------------------------------
+export const OAUTH_INTENT_KEY = "fetchit_oauth_intent";
+export const OAUTH_ERROR_KEY = "fetchit_oauth_error";
+
+// Kick off Google OAuth. `intent` is "signup" | "login"; it's stashed so the
+// callback knows which flow to run. Returns Supabase's { data, error } (an error
+// means the redirect couldn't even start).
+export async function signInWithGoogle(intent) {
+  try {
+    sessionStorage.setItem(OAUTH_INTENT_KEY, intent);
+  } catch {
+    /* sessionStorage unavailable — callback falls back to "login" */
+  }
+  return supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${window.location.origin}/auth/callback`,
+      // Always let the user choose which Google account to use.
+      queryParams: { prompt: "select_account" },
+    },
+  });
+}
+
+// Has this user completed FetchIt's Google signup before? Reads the flag we set
+// (not raw existence in auth.users) — see the note above.
+export function isRegistered(session) {
+  const meta = (session && session.user && session.user.user_metadata) || {};
+  return !!meta.fetchit_registered;
+}
+
+// Mark the signed-in user as a fully-registered FetchIt account (set once, when
+// a new Google signup is accepted). Future logins read this via isRegistered().
+export async function markRegistered() {
+  return supabase.auth.updateUser({ data: { fetchit_registered: true } });
+}
+
+// ---------------------------------------------------------------------------
+// Auth provider detection + reauthentication. Google-only users have no
+// password, so any password-gated area (Cards & Address wall, account deletion,
+// change password) must branch on the provider. Detect it from the user's
+// `identities` (the authoritative list of linked providers), falling back to
+// `app_metadata.provider`. See the reusable <ReauthGate> component.
+// ---------------------------------------------------------------------------
+
+// The providers this user can authenticate with, e.g. ["email"], ["google"], or
+// ["email","google"] (a linked account). Reads identities; falls back to the
+// app_metadata provider, then "email".
+export function userProviders(session) {
+  const user = session && session.user;
+  if (!user) return [];
+  const ids = Array.isArray(user.identities) ? user.identities : [];
+  const provs = ids.map((i) => i.provider).filter(Boolean);
+  if (provs.length) return provs;
+  const meta = user.app_metadata && user.app_metadata.provider;
+  return meta ? [meta] : ["email"];
+}
+
+// True if the user has a password (an "email" identity) and can confirm with it.
+export function hasPasswordIdentity(session) {
+  return userProviders(session).includes("email");
+}
+
+// True for Google-only users (no password) — they reauthenticate via Google,
+// and cannot change a password (there isn't one).
+export function isGoogleUser(session) {
+  const provs = userProviders(session);
+  return provs.includes("google") && !provs.includes("email");
+}
+
+const REAUTH_KEY = "fetchit_reauth";
+
+// Did THIS page load actually arrive with a fresh OAuth response? Captured
+// SYNCHRONOUSLY at module load because Supabase's detectSessionInUrl strips the
+// auth params from the URL moments later (same trick as App.js's URL_RETURN —
+// module evaluation is synchronous, the strip is a later microtask). A genuine
+// Google reauth return carries an implicit-flow access/refresh token in the
+// hash, or a PKCE `code` in the query; a cancelled attempt (user closes the
+// Google prompt and navigates back) carries none of these (often an `error`).
+// This is the guard that stops a stale `purpose` marker from being replayed.
+const OAUTH_RETURN_PRESENT = (() => {
+  if (typeof window === "undefined" || !window.location) return false;
+  try {
+    const hash = new URLSearchParams(
+      (window.location.hash || "").replace(/^#/, "")
+    );
+    const search = new URLSearchParams(window.location.search || "");
+    return Boolean(
+      hash.get("access_token") ||
+        hash.get("refresh_token") ||
+        search.get("code")
+    );
+  } catch {
+    return false;
+  }
+})();
+
+// Start a Google reauthentication: stash the gate's `purpose`, then run the
+// OAuth flow with the account chooser forced. The browser redirects to Google
+// and back to `returnTo` (the gated page itself, NOT /auth/callback), where
+// consumeReauthResult() detects the return. Returns Supabase's { data, error }
+// (an error means the redirect couldn't even start).
+export async function startGoogleReauth(purpose, returnTo) {
+  try {
+    sessionStorage.setItem(REAUTH_KEY, purpose);
+  } catch {
+    /* sessionStorage unavailable */
+  }
+  const origin =
+    typeof window !== "undefined" && window.location ? window.location.origin : "";
+  const path =
+    returnTo || (typeof window !== "undefined" ? window.location.pathname : "/");
+  return supabase.auth.signInWithOAuth({
+    provider: "google",
+    options: {
+      redirectTo: `${origin}${path}`,
+      queryParams: { prompt: "select_account" },
+    },
+  });
+}
+
+// On return from a Google reauth redirect: true exactly once, for the matching
+// purpose (clears the marker). The gated page calls this on mount to resume.
+// Password reauth is synchronous and never sets this.
+//
+// HARDENED: the marker alone isn't enough — we also require that this page load
+// actually carried a fresh Google OAuth response (OAUTH_RETURN_PRESENT). A user
+// who cancels at Google and navigates back manually still has the stale marker
+// but NO auth params, so they're rejected and the marker is cleared (so it can't
+// be replayed). This closes the "cancel → back button → bypass the wall" hole.
+export function consumeReauthResult(purpose) {
+  try {
+    if (sessionStorage.getItem(REAUTH_KEY) !== purpose) return false;
+    // Stale/replayed marker without a real OAuth return → reject and clear it.
+    if (!OAUTH_RETURN_PRESENT) {
+      sessionStorage.removeItem(REAUTH_KEY);
+      return false;
+    }
+    sessionStorage.removeItem(REAUTH_KEY);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // Login email second factor (real OTP). After the password is verified we sign
@@ -352,7 +508,7 @@ export function detectPlanChange(session, newPlan, newBilling) {
   const current = getPlan(session); // effective plan (Free if lapsed)
   const currentBilling = getPlanBilling(session);
   const paid = hasPlan(session) && current !== "Free";
-  const rank = { Free: 0, Plus: 1, Pro: 2, Max: 3 };
+  const rank = { Free: 0, Plus: 1, Pro: 2, Max: 3, max_family: 3 };
 
   if (newPlan === "Free") {
     if (paid) return { type: "downgrade", fromPlan: current, fromBilling: currentBilling };
@@ -410,13 +566,33 @@ export async function cancelStripeSubscriptions({
 // message with the reset countdown and an upgrade nudge.
 // ---------------------------------------------------------------------------
 
-// Normalize any plan label to the canonical capitalized name.
+// Normalize any plan label to the canonical key. "max_family" is a real Max
+// subscriber's invited family member — same usage limits as Max, but no
+// subscription of their own (covered by the owner) and no family-sharing/invite
+// powers. It stays lowercase to mark it apart from the paid "Max" tier.
 export function planKey(plan) {
   const p = (plan == null ? "" : String(plan)).trim().toLowerCase();
   if (p === "plus") return "Plus";
   if (p === "pro") return "Pro";
   if (p === "max") return "Max";
+  if (p === "max_family") return "max_family";
   return "Free";
+}
+
+// A Max OWNER (real paid Max subscriber) — can use family sharing / invite.
+export function isMaxOwner(session) {
+  return getPlan(session) === "Max";
+}
+
+// A family MEMBER on someone else's Max plan — Max-level access, no invite power.
+export function isFamilyMember(session) {
+  return getPlan(session) === "max_family";
+}
+
+// Friendly plan name for display (the raw key "max_family" → "Max (Family)").
+export function planDisplayName(plan) {
+  const key = planKey(plan);
+  return key === "max_family" ? "Max (Family)" : key;
 }
 
 // Scheduled-cancellation timestamp (ms since epoch) from metadata, or null.
@@ -438,11 +614,50 @@ export function hasPlan(session) {
 // cancellation keeps the paid plan until plan_cancels_at — only once that date
 // passes does the user become Free. This is the single source of truth, so
 // token limits, the account card, and /plans all honor the grace period.
+//
+// A family member (max_family) similarly keeps access until family_disband_at
+// (set when their owner cancels Max); after that date getPlan returns Free —
+// the lazy-disband cutoff. The actual metadata/membership cleanup happens on the
+// member's next app use (familyDisbandDue → leaveFamily).
 export function getPlan(session) {
   const meta = (session && session.user && session.user.user_metadata) || {};
   const at = cancelAtMs(meta);
   if (at !== null && Date.now() >= at) return "Free";
-  return planKey(meta.plan);
+  const key = planKey(meta.plan);
+  if (key === "max_family" && familyDisbandAtMs(meta) !== null) {
+    if (Date.now() >= familyDisbandAtMs(meta)) return "Free";
+  }
+  return key;
+}
+
+// family_disband_at (ms since epoch) from a member's metadata, or null.
+function familyDisbandAtMs(meta) {
+  if (!meta || !meta.family_disband_at) return null;
+  const t = new Date(meta.family_disband_at).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+
+// True when a family member's owner has cancelled and the disband date has
+// passed — the member should be finalized (downgraded + membership removed) on
+// their next app use. (getPlan already reports Free; this drives the cleanup.)
+export function familyDisbandDue(session) {
+  const meta = (session && session.user && session.user.user_metadata) || {};
+  if (planKey(meta.plan) !== "max_family") return false;
+  const at = familyDisbandAtMs(meta);
+  return at !== null && Date.now() >= at;
+}
+
+// The scheduled family-disband Date for a member (access ends then), or null.
+export function familyDisbandAt(session) {
+  const meta = (session && session.user && session.user.user_metadata) || {};
+  const at = familyDisbandAtMs(meta);
+  return at === null ? null : new Date(at);
+}
+
+// The owner of a family member's plan, for display ("name or email").
+export function familyOwnerLabel(session) {
+  const meta = (session && session.user && session.user.user_metadata) || {};
+  return meta.family_owner_name || meta.family_owner_email || "the plan owner";
 }
 
 // True when a cancellation is scheduled but the access period hasn't ended yet
@@ -473,6 +688,7 @@ export const PLAN_USAGE_LABEL = {
   Plus: "Up to 2× Free usage",
   Pro: "Up to 5× Free usage",
   Max: "Up to 25× Free usage",
+  max_family: "Up to 25× Free usage", // same as Max
 };
 export function planUsageLabel(plan) {
   return PLAN_USAGE_LABEL[planKey(plan)];
@@ -544,6 +760,12 @@ export async function cancelSubscription({ suppressEmail = false } = {}) {
       dateISO: cancelsAt ? cancelsAt.toISOString() : null,
     });
   }
+  // Cancelling Max → SCHEDULE the family disband for the period end. Members keep
+  // their max_family access until then (and are emailed that it ends on that
+  // date), then get lazily downgraded to Free on their next app use.
+  if (canceledPlan === "Max") {
+    scheduleFamilyDisband(cancelsAt ? cancelsAt.toISOString() : null);
+  }
   return { error: null, cancelsAt, canceledPlan };
 }
 
@@ -580,23 +802,46 @@ export async function reactivateSubscription() {
     plan: reactivatedPlan,
     dateISO: nextBill ? nextBill.toISOString() : null,
   });
+  // Reactivating Max → call off the scheduled family disband (members stay).
+  if (reactivatedPlan === "Max") unscheduleFamilyDisband();
   return { error: null };
 }
 
-// Per-session token budgets. Free = 65k; the rest are multiples of Free.
+// Per-session token budgets — the per-5-hour-window cap. These values are the
+// authoritative numbers from the FetchIt Terms of Service (Section 6, "Usage
+// Limits and Token Allocation"); the TOS is the legal source of truth, so this
+// table MUST stay in sync with /tos (src/components/TosPage.js).
 export const TOKEN_LIMITS = {
-  Free: 65000,
-  Plus: 130000, // 2x Free
-  Pro: 325000, // 5x Free
-  Max: 1625000, // 25x Free
+  Free: 50000,
+  Plus: 130000,
+  Pro: 325000,
+  Max: 1625000,
+  max_family: 1625000, // family members get Max-level limits
 };
 
 export function tokenLimit(plan) {
   return TOKEN_LIMITS[planKey(plan)];
 }
 
+// Weekly token caps, also from the TOS (Section 6). Kept in sync with /tos and
+// ENFORCED via the `weekly_usage` table alongside the 5-hour `sessions` window
+// (see ChatPage `consumeOrBlock`).
+export const WEEKLY_TOKEN_LIMITS = {
+  Free: 100000,
+  Plus: 355000,
+  Pro: 1811000,
+  Max: 9579000,
+  max_family: 9579000, // family members get Max-level limits
+};
+
+export function weeklyTokenLimit(plan) {
+  return WEEKLY_TOKEN_LIMITS[planKey(plan)];
+}
+
 // Usage window length — every plan resets every 5 hours.
 export const SESSION_WINDOW_MS = 5 * 60 * 60 * 1000;
+// Weekly window length, for the TOS weekly cap (see WEEKLY_TOKEN_LIMITS).
+export const WEEK_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 // What to suggest when a plan hits its limit: the next tier up and how much more
 // usage it gives versus Free. Max is the top tier (no upgrade).
@@ -605,6 +850,7 @@ export const NEXT_PLAN = {
   Plus: { plan: "Pro", multiplier: "5x" },
   Pro: { plan: "Max", multiplier: "25x" },
   Max: null,
+  max_family: null, // already at Max-level; nothing to upgrade to
 };
 
 // Rough token estimate for the mock chat (~4 chars/token). Good enough for a
@@ -685,6 +931,88 @@ export async function addSessionTokens(sessionId, currentUsed, tokens) {
 }
 
 // ---------------------------------------------------------------------------
+// Weekly usage window (TOS §6 weekly cap). One row per week in the Supabase
+// `weekly_usage` table; the week resets every Monday at 12:00 AM LOCAL time.
+// Enforced alongside the 5-hour `sessions` window — a send is blocked if EITHER
+// window is exhausted. Same fail-open behaviour: a DB error (e.g. table not yet
+// migrated) returns null and the caller doesn't block.
+// ---------------------------------------------------------------------------
+
+// Start of the current week: this week's Monday at 00:00 local time (ms since
+// epoch). Same Monday-anchored calc as the analytics "weekly" period.
+export function weekStartMs() {
+  const now = new Date();
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // local midnight today
+  const dow = (d.getDay() + 6) % 7; // Mon=0 … Sun=6
+  d.setDate(d.getDate() - dow); // back to Monday
+  return d.getTime();
+}
+
+// The next reset moment — next Monday 00:00 local (a Date).
+export function nextWeeklyReset() {
+  return new Date(weekStartMs() + WEEK_WINDOW_MS);
+}
+
+const mapWeekly = (row) => ({
+  id: row.id,
+  plan: row.plan,
+  tokensUsed: Number(row.tokens_used) || 0,
+  weekStart: row.week_start,
+});
+
+// True once the stored row belongs to an earlier week (i.e. Monday has passed).
+export function isWeekExpired(week) {
+  if (!week) return true;
+  return new Date(week.weekStart).getTime() !== weekStartMs();
+}
+
+// The user's active (current-week) usage row, or null. Reads the newest row.
+export async function getActiveWeeklyUsage() {
+  const { data, error } = await supabase
+    .from("weekly_usage")
+    .select("*")
+    .order("week_start", { ascending: false })
+    .limit(1);
+  if (error) {
+    console.error("getActiveWeeklyUsage failed:", error.message);
+    return null;
+  }
+  const row = data && data[0];
+  if (!row) return null;
+  const week = mapWeekly(row);
+  return isWeekExpired(week) ? null : week;
+}
+
+// The active weekly row, creating a fresh one (the weekly reset) if none exists
+// for the current week. Returns null only on a DB error (callers fail open).
+export async function getOrCreateWeeklyUsage(plan) {
+  const active = await getActiveWeeklyUsage();
+  if (active) return active;
+  const weekStart = new Date(weekStartMs()).toISOString();
+  const { data, error } = await supabase
+    .from("weekly_usage")
+    .insert({ plan: planKey(plan), tokens_used: 0, week_start: weekStart })
+    .select()
+    .single();
+  if (error) {
+    console.error("getOrCreateWeeklyUsage failed:", error.message);
+    return null;
+  }
+  return mapWeekly(data);
+}
+
+// Add tokens to the weekly row and return the new running total.
+export async function addWeeklyTokens(weeklyId, currentUsed, tokens) {
+  const total = (Number(currentUsed) || 0) + (Number(tokens) || 0);
+  const { error } = await supabase
+    .from("weekly_usage")
+    .update({ tokens_used: total })
+    .eq("id", weeklyId);
+  if (error) console.error("addWeeklyTokens failed:", error.message);
+  return total;
+}
+
+// ---------------------------------------------------------------------------
 // Stripe — real subscriptions via the `create-subscription` Edge Function.
 // The secret key lives only in that function (server-side); the browser just
 // confirms the PaymentIntent it returns. See supabase/functions/.
@@ -711,6 +1039,300 @@ export async function createSubscription({ plan, billing }) {
   }
   if (data?.error) return { error: { message: data.error } };
   return { data };
+}
+
+// Ask the edge function to reuse-or-create the user's Stripe customer and start
+// a SetupIntent (save a card for future off-session charges, NO charge now).
+// Returns { clientSecret, customerId } or { error }. Confirm it in the browser
+// with stripe.confirmCardSetup(clientSecret, { payment_method: { card, … } }).
+export async function createSetupIntent() {
+  const { data, error } = await supabase.functions.invoke("create-setup-intent", {
+    body: {},
+  });
+  if (error) {
+    let message = error.message || "Could not start card setup.";
+    try {
+      const body = await error.context?.json?.();
+      if (body?.error) message = body.error;
+    } catch {
+      /* keep the generic message */
+    }
+    return { error: { message } };
+  }
+  if (data?.error) return { error: { message: data.error } };
+  return { data };
+}
+
+// After confirmCardSetup succeeds, hand the resulting payment_method id to the
+// edge function: it sets the card as the customer's default and returns the
+// NON-sensitive card metadata { brand, last4, expMonth, expYear } for display.
+export async function saveCard(paymentMethodId) {
+  const { data, error } = await supabase.functions.invoke("save-card", {
+    body: { paymentMethodId },
+  });
+  if (error) {
+    let message = error.message || "Could not save your card.";
+    try {
+      const body = await error.context?.json?.();
+      if (body?.error) message = body.error;
+    } catch {
+      /* keep the generic message */
+    }
+    return { error: { message } };
+  }
+  if (data?.error) return { error: { message: data.error } };
+  return { data };
+}
+
+// ---------------------------------------------------------------------------
+// Profiles — Supabase "profiles" table (shipping address + Stripe pointers +
+// display-only card metadata), one row per user, scoped via RLS. user_id is the
+// table's primary key and defaults to auth.uid(), so the client never sends it.
+// ---------------------------------------------------------------------------
+const mapProfile = (row) =>
+  row
+    ? {
+        fullName: row.full_name || "",
+        addressLine1: row.address_line1 || "",
+        addressLine2: row.address_line2 || "",
+        city: row.city || "",
+        state: row.state || "",
+        zip: row.zip || "",
+        country: row.country || "United States",
+        stripeCustomerId: row.stripe_customer_id || null,
+        stripePaymentMethodId: row.stripe_payment_method_id || null,
+        cardBrand: row.card_brand || null,
+        cardLast4: row.card_last4 || null,
+        cardExpMonth: row.card_exp_month || null,
+        cardExpYear: row.card_exp_year || null,
+        tosAccepted: !!row.tos_accepted,
+        tosAcceptedAt: row.tos_accepted_at || null,
+      }
+    : null;
+
+// The signed-in user's profile row, or null if they haven't saved one yet.
+export async function getProfile() {
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .maybeSingle();
+  if (error) {
+    console.error("getProfile failed:", error.message);
+    return null;
+  }
+  return mapProfile(data);
+}
+
+// Upsert the caller's profile. Accepts a partial of camelCase fields and writes
+// only the snake_case columns present, plus updated_at. user_id is filled by the
+// table's auth.uid() default and is the upsert conflict target.
+export async function saveProfile(fields) {
+  const map = {
+    fullName: "full_name",
+    addressLine1: "address_line1",
+    addressLine2: "address_line2",
+    city: "city",
+    state: "state",
+    zip: "zip",
+    country: "country",
+    stripeCustomerId: "stripe_customer_id",
+    stripePaymentMethodId: "stripe_payment_method_id",
+    cardBrand: "card_brand",
+    cardLast4: "card_last4",
+    cardExpMonth: "card_exp_month",
+    cardExpYear: "card_exp_year",
+    tosAccepted: "tos_accepted",
+    tosAcceptedAt: "tos_accepted_at",
+  };
+  const row = { updated_at: new Date().toISOString() };
+  for (const [camel, snake] of Object.entries(map)) {
+    if (fields[camel] !== undefined) row[snake] = fields[camel];
+  }
+  const { error } = await supabase
+    .from("profiles")
+    .upsert(row, { onConflict: "user_id" });
+  if (error) {
+    console.error("saveProfile failed:", error.message);
+    return { error: { message: error.message } };
+  }
+  return { error: null };
+}
+
+// ---------------------------------------------------------------------------
+// Family sharing (Max plan). An owner invites up to 4 people; the cross-user
+// parts (sending the email to an arbitrary invitee, reading/accepting an invite
+// by token as a different/logged-out user, downgrading a removed member) run in
+// the family-* Edge Functions with the service role. The owner's own reads of
+// their invites/members are plain RLS-scoped queries below.
+// ---------------------------------------------------------------------------
+export const MAX_FAMILY_SLOTS = 4;
+
+// A family-invite token, persisted across the signup/login round-trip so a user
+// who follows a join link and then creates an account / signs in still accepts
+// the right invite afterwards.
+const FAMILY_INVITE_KEY = "fetchit_family_invite";
+export function setFamilyInviteToken(token) {
+  try {
+    localStorage.setItem(FAMILY_INVITE_KEY, token);
+  } catch {
+    /* ignore */
+  }
+}
+export function getFamilyInviteToken() {
+  try {
+    return localStorage.getItem(FAMILY_INVITE_KEY);
+  } catch {
+    return null;
+  }
+}
+export function clearFamilyInviteToken() {
+  try {
+    localStorage.removeItem(FAMILY_INVITE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+// Unwrap an edge-function call to { data } | { error: { message } }.
+async function invokeFamily(fn, body, fallbackMsg) {
+  const { data, error } = await supabase.functions.invoke(fn, { body });
+  if (error) {
+    let message = error.message || fallbackMsg;
+    try {
+      const b = await error.context?.json?.();
+      if (b?.error) message = b.error;
+    } catch {
+      /* keep generic */
+    }
+    return { error: { message } };
+  }
+  if (data?.error) return { error: { message: data.error } };
+  return { data };
+}
+
+// Owner: read this user's slots (their non-declined invites, member emails
+// resolved from the accepted ones). Returns up to MAX_FAMILY_SLOTS entries:
+// { id, email, status } where status is "pending" | "accepted".
+export async function getFamilyData() {
+  const { data, error } = await supabase
+    .from("family_invites")
+    .select("id, invitee_email, status, created_at")
+    .neq("status", "declined")
+    .order("created_at", { ascending: true });
+  if (error) {
+    console.error("getFamilyData failed:", error.message);
+    return [];
+  }
+  return (data || [])
+    .slice(0, MAX_FAMILY_SLOTS)
+    .map((r) => ({ id: r.id, email: r.invitee_email, status: r.status }));
+}
+
+// Owner: create + email an invite (server-side; verifies Max + the 4-slot cap).
+export async function sendFamilyInvite(email) {
+  const origin =
+    typeof window !== "undefined" && window.location ? window.location.origin : "";
+  return invokeFamily(
+    "send-family-invite",
+    { email: String(email || "").trim(), appOrigin: origin },
+    "Couldn't send the invite."
+  );
+}
+
+// App origin for email logo URLs (absolute) — empty during SSR/tests.
+const originForEmail = () =>
+  typeof window !== "undefined" && window.location ? window.location.origin : "";
+
+// Owner: remove a slot — revoke a pending invite or remove an accepted member
+// (downgrades that member to Free). `inviteId` identifies the slot.
+export async function removeFamilyMember(inviteId) {
+  return invokeFamily(
+    "family-manage",
+    { action: "remove", inviteId, appOrigin: originForEmail() },
+    "Couldn't remove the member."
+  );
+}
+
+// Owner: disband the whole family IMMEDIATELY (downgrade + notify all members).
+// Used on a plan CHANGE off Max (the owner switches to a lower tier now).
+export async function disbandFamily() {
+  return invokeFamily(
+    "family-manage",
+    { action: "disband", appOrigin: originForEmail() },
+    "Couldn't disband the family."
+  );
+}
+
+// Owner: SCHEDULE the family disband for the owner's period end. Members keep
+// max_family access until `disbandAtISO` (mirrored onto their metadata as
+// family_disband_at), and are emailed that access ends then. Used on Max
+// CANCELLATION (the owner keeps Max until the period ends, so members do too).
+export async function scheduleFamilyDisband(disbandAtISO) {
+  return invokeFamily(
+    "family-manage",
+    { action: "schedule", disbandAt: disbandAtISO, appOrigin: originForEmail() },
+    "Couldn't schedule the family change."
+  );
+}
+
+// Owner: undo a scheduled disband (the owner reactivated their Max plan).
+export async function unscheduleFamilyDisband() {
+  return invokeFamily("family-manage", { action: "unschedule" }, "Couldn't update the family.");
+}
+
+// Member: leave the family — removes their membership and sets their plan to
+// Free. Used by the "Leave Family" button AND the lazy finalize once a scheduled
+// disband date has passed. Refreshes the session so getPlan() reflects Free.
+// Sets SELF_LEFT_KEY first so PlanChangeWatcher doesn't mistake this self-
+// initiated max_family→Free downgrade for being removed by the owner.
+export const SELF_LEFT_KEY = "fetchit_left_family";
+export async function leaveFamily() {
+  const res = await invokeFamily("family-manage", { action: "leave" }, "Couldn't leave the family.");
+  if (!res.error) {
+    try {
+      sessionStorage.setItem(SELF_LEFT_KEY, "1");
+    } catch {
+      /* ignore */
+    }
+    await supabase.auth.refreshSession();
+  }
+  return res;
+}
+
+// Join flow: validate a token (public — works logged out). Returns
+// { ownerName, inviteeEmail, status } or { error }.
+export async function validateFamilyInvite(token) {
+  return invokeFamily("family-invite", { action: "validate", token }, "Invalid invite.");
+}
+
+// Join flow: accept (must be logged in). Creates the membership, sets the
+// caller's plan to max_family, marks the invite accepted. On success we refresh
+// the local session so getPlan() immediately reflects the new max_family plan
+// (the admin metadata write doesn't auto-propagate to this client otherwise).
+export async function acceptFamilyInvite(token) {
+  const res = await invokeFamily(
+    "family-invite",
+    { action: "accept", token },
+    "Couldn't accept the invite."
+  );
+  if (!res.error) await supabase.auth.refreshSession();
+  return res;
+}
+
+// Join flow: decline the invite.
+export async function declineFamilyInvite(token) {
+  return invokeFamily("family-invite", { action: "decline", token }, "Couldn't decline the invite.");
+}
+
+// Accept a pending family invite stashed during a join-link signup/login, if
+// any. Returns { accepted } — callers route to /chat regardless (a failed accept
+// just leaves them on Free). Used by the login paths AND onboarding completion.
+export async function maybeAcceptPendingInvite() {
+  const token = getFamilyInviteToken();
+  if (!token) return { accepted: false };
+  const res = await acceptFamilyInvite(token);
+  clearFamilyInviteToken();
+  return { accepted: !res.error, error: res.error };
 }
 
 // ---------------------------------------------------------------------------
@@ -779,11 +1401,159 @@ export async function deleteChat(chatId) {
 
 // ---------------------------------------------------------------------------
 // Order history — Supabase "orders" table, scoped to the user via RLS.
-// Rows: { id, user_id, product_name, price, status, created_at }.
+// Rows: { id, user_id, product_name, product_image, retailer, order_price,
+//         service_fee, zinc_order_id, status, created_at }.
 // ---------------------------------------------------------------------------
-export async function saveOrder({ productName, price, status = "completed" }) {
-  const { error } = await supabase
-    .from("orders")
-    .insert({ product_name: productName, price, status });
+
+// FetchIt's service fee — what we charge on top of the retailer's price for
+// doing the checkout (demo only; no real money changes hands):
+//   under $20      → flat $2.00
+//   $20 and over   → $1.00 + 5% of the order price
+export const SERVICE_FEE_FLAT = 2.0; // orders under the threshold
+export const SERVICE_FEE_THRESHOLD = 20;
+export const SERVICE_FEE_BASE = 1.0; // base for orders at/over the threshold
+export const SERVICE_FEE_RATE = 0.05; // + this share of the order price
+
+// Parse a price like "$34.99" / 34.99 → 34.99 (number), or null if unparseable.
+function parsePrice(value) {
+  if (value == null) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const n = parseFloat(String(value).replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+export function serviceFeeFor(price) {
+  const amount = parsePrice(price);
+  if (amount == null) return null;
+  const fee =
+    amount < SERVICE_FEE_THRESHOLD
+      ? SERVICE_FEE_FLAT
+      : SERVICE_FEE_BASE + amount * SERVICE_FEE_RATE;
+  return Math.round(fee * 100) / 100;
+}
+
+export async function saveOrder({
+  productName,
+  price,
+  productImage = null,
+  retailer = null,
+  category = null,
+  zincOrderId = null,
+  status = "completed",
+}) {
+  const orderPrice = parsePrice(price);
+  const { error } = await supabase.from("orders").insert({
+    product_name: productName,
+    product_image: productImage,
+    retailer,
+    // Product category from Zinc's response (mocked in the demo) — powers the
+    // category breakdown on the Orders & Analytics page.
+    category,
+    order_price: orderPrice,
+    service_fee: serviceFeeFor(price),
+    zinc_order_id: zincOrderId,
+    status,
+  });
   if (error) console.error("saveOrder failed:", error.message);
+}
+
+const mapOrder = (row) => ({
+  id: row.id,
+  productName: row.product_name,
+  productImage: row.product_image,
+  retailer: row.retailer,
+  category: row.category,
+  // Fall back to the legacy text `price` column for rows saved before the
+  // schema gained order_price (older installs).
+  orderPrice:
+    row.order_price != null ? Number(row.order_price) : parsePrice(row.price),
+  serviceFee: row.service_fee != null ? Number(row.service_fee) : null,
+  zincOrderId: row.zinc_order_id,
+  status: row.status,
+  createdAt: row.created_at,
+});
+
+export async function getOrders() {
+  const { data, error } = await supabase
+    .from("orders")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) {
+    console.error("getOrders failed:", error.message);
+    return [];
+  }
+  return (data || []).map(mapOrder);
+}
+
+// ---------------------------------------------------------------------------
+// Spend analytics (Orders & Analytics page). All client-side over the orders
+// list. "Spend" for an order = order_price only (the service fee is excluded).
+// Periods are CALENDAR-based (local time): weekly = since this Monday, monthly =
+// since the 1st, yearly = since Jan 1; lifetime = all time.
+// ---------------------------------------------------------------------------
+export const SPEND_PERIODS = [
+  { key: "lifetime", label: "Lifetime" },
+  { key: "yearly", label: "Yearly" },
+  { key: "monthly", label: "Monthly" },
+  { key: "weekly", label: "Weekly" },
+];
+
+function orderSpend(o) {
+  return Number(o.orderPrice) || 0;
+}
+
+// Inclusive start-of-period timestamp (ms, local time). Lifetime → -Infinity.
+function periodStart(periodKey) {
+  const now = new Date();
+  const y = now.getFullYear();
+  switch (periodKey) {
+    case "weekly": {
+      // Midnight at the start of the most recent Monday (Mon=0 … Sun=6).
+      const start = new Date(y, now.getMonth(), now.getDate());
+      const dow = (start.getDay() + 6) % 7;
+      start.setDate(start.getDate() - dow);
+      return start.getTime();
+    }
+    case "monthly":
+      return new Date(y, now.getMonth(), 1).getTime();
+    case "yearly":
+      return new Date(y, 0, 1).getTime();
+    case "lifetime":
+    default:
+      return -Infinity;
+  }
+}
+
+function withinPeriod(o, periodKey) {
+  if (periodKey === "lifetime") return true;
+  const t = new Date(o.createdAt).getTime();
+  if (Number.isNaN(t)) return false;
+  return t >= periodStart(periodKey);
+}
+
+// Total spend per period → { lifetime, yearly, monthly, weekly } (numbers).
+export function spendSummary(orders) {
+  const out = {};
+  for (const p of SPEND_PERIODS) {
+    out[p.key] = (orders || []).reduce(
+      (sum, o) => sum + (withinPeriod(o, p.key) ? orderSpend(o) : 0),
+      0
+    );
+  }
+  return out;
+}
+
+// Category totals within a period, sorted high→low: [{ category, total }, …].
+export function categoryBreakdown(orders, periodKey) {
+  const period =
+    SPEND_PERIODS.find((p) => p.key === periodKey) || SPEND_PERIODS[0];
+  const totals = new Map();
+  for (const o of orders || []) {
+    if (!withinPeriod(o, period.key)) continue;
+    const cat = o.category || "Uncategorized";
+    totals.set(cat, (totals.get(cat) || 0) + orderSpend(o));
+  }
+  return [...totals.entries()]
+    .map(([category, total]) => ({ category, total }))
+    .sort((a, b) => b.total - a.total);
 }

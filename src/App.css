@@ -85,12 +85,22 @@ section[id] {
   transform: translateY(-3px);
 }
 
-/* ---------- Logo (shared by navbar + footer) ---------- */
+/* ---------- Logo (shared by navbar + footer + all headers) ---------- */
 .logo {
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
+/* The brand mark is now a single image (public/fetchit-logo.png) — a square
+   yellow badge that blends with the palette. Sized small (tagline not legible)
+   for tight bars; the landing hero shows it large (see .hero-logo). */
+.logo-img {
+  display: block;
+  height: 44px;
+  width: auto;
+  border-radius: 12px;
+}
+/* Legacy emoji-tile + wordmark styles, kept for any remaining decorative use. */
 .logo-mark {
   width: 46px;
   height: 46px;
@@ -105,4 +115,66 @@ section[id] {
   font-family: "Baloo 2", sans-serif;
   font-size: 1.6rem;
   font-weight: 800;
+}
+
+/* ---------------------------------------------------------------------------
+   PlanChangeWatcher modal — global "you've been removed from the family plan"
+   dialog (App.js). Neutral white card so it reads on both light + dark pages.
+   --------------------------------------------------------------------------- */
+.plan-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.55);
+  display: grid;
+  place-items: center;
+  padding: 1.2rem;
+}
+.plan-modal {
+  width: 100%;
+  max-width: 420px;
+  background: var(--white);
+  border-radius: var(--radius-lg, 24px);
+  padding: 2rem 1.8rem;
+  text-align: center;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.4);
+}
+.plan-modal-icon {
+  font-size: 2.4rem;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+}
+.plan-modal h2 {
+  font-family: "Baloo 2", sans-serif;
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1.25;
+  margin-bottom: 0.6rem;
+}
+.plan-modal p {
+  color: var(--charcoal-soft);
+  font-weight: 600;
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
+}
+.plan-modal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.plan-modal-actions .btn-primary {
+  width: 100%;
+}
+.plan-modal-secondary {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--charcoal-soft);
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 0.95rem;
+  padding: 0.5rem;
+}
+.plan-modal-secondary:hover {
+  color: var(--charcoal);
 }

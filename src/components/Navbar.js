@@ -15,10 +15,7 @@ function Navbar({ onNavigate }) {
     <header className="navbar">
       <div className="container nav">
         <a href="#top" className="logo" onClick={(e) => handleNav(e, "top")}>
-          <span className="logo-mark" role="img" aria-label="Fetchit dog">
-            🐕
-          </span>
-          <span className="logo-text">Fetchit</span>
+          <img src="/fetchit-logo.png" alt="FetchIt" className="logo-img" />
         </a>
 
         <button
