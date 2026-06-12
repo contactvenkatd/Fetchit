@@ -118,7 +118,6 @@ function ChatMockup() {
 
   const idRef = useRef(0);
   const timersRef = useRef([]);
-  const startedRef = useRef(false);
   const sectionRef = useRef(null);
   const chatRef = useRef(null);
   const startRef = useRef(null);
@@ -147,9 +146,13 @@ function ChatMockup() {
     setMessages((prev) => prev.filter((m) => m.type !== type));
 
   // Reassigned every render so the observer always calls the latest closure.
+  // Each call RESETS the demo and replays it from the very beginning, so the
+  // animation restarts every time the section re-enters the viewport.
   startRef.current = () => {
-    if (startedRef.current) return;
-    startedRef.current = true;
+    // Cancel anything still scheduled from a previous play, then clear the chat.
+    timersRef.current.forEach(clearTimeout);
+    timersRef.current = [];
+    setMessages([]);
 
     if (prefersReduced()) {
       setMessages([
@@ -175,16 +178,14 @@ function ChatMockup() {
     }, typingAt + TYPING_MS);
   };
 
-  // Start the demo when the chat scrolls into view (once).
+  // Replay the demo every time the chat scrolls into view. The observer keeps
+  // watching (no disconnect), so scrolling away and back restarts it fresh.
   useEffect(() => {
     const el = sectionRef.current;
     if (!el) return undefined;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          if (startRef.current) startRef.current();
-          observer.disconnect();
-        }
+        if (entry.isIntersecting && startRef.current) startRef.current();
       },
       { threshold: 0.25 }
     );

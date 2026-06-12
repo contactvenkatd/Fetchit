@@ -92,20 +92,32 @@ email). See "Transactional Email" below.
 ## Page Sections (in order)
 1. **Navbar** — sticky; logo, smooth-scroll links (How It Works / Features /
    Pricing), "Try Free" CTA, hamburger menu ≤760px.
-2. **Hero** — headline "Just Tell FetchIt What You Want"; subheading about
-   chatting with the AI; a single "See How It Works" button that scrolls to the
-   How It Works section.
+2. **Hero** — headline "Shop Smarter. Fetch Faster."; subheading about FetchIt
+   searching Amazon, Walmart, Target, Best Buy, AliExpress and more, then buying
+   automatically; a **"Shops from:" retailer-badges row** (`.hero-retailers` /
+   `.retailer-badge` — charcoal pills with a yellow border, listing all 8
+   Zinc-supported retailers: Amazon, Walmart, Target, Best Buy, Costco, Home
+   Depot, Lowe's, AliExpress) below the subheading, followed by a muted "Access to
+   over 20 million SKUs across all retailers" line (`.hero-skus`); a single "See
+   How It Works" button that scrolls to the How It Works section.
 3. **Meet FetchIt AI** (`ChatMockup`) — view-only mock chat UI (see below).
 4. **How It Works** — 3 steps: Chat with FetchIt AI → Pick from AI-Curated
    Recommendations → FetchIt Buys It For You.
-5. **Features** — 4 cards: Conversational AI, Smart Recommendations,
-   Auto Checkout (Puppeteer-powered), Secure Payments (Stripe-powered).
+5. **Features** — 5 cards: Shop Everywhere at Once (multi-store search across all
+   8 Zinc retailers — Amazon/Walmart/Target/Best Buy/Costco/Home Depot/Lowe's/
+   AliExpress — over 20 million products, for the best price), Conversational AI,
+   Smart Recommendations, Auto Checkout (Puppeteer-powered), Secure Payments
+   (Stripe-powered). The grid is a fixed `repeat(5, 1fr)` — all 5 cards stay on a
+   single row at every width; the breakpoints shrink padding/icon/type rather than
+   wrapping to more rows.
 6. **Social Proof** — 50,000+ shoppers, $2.4M saved this month, 99.8% satisfaction.
 7. **Pricing** — 4 tiers, Monthly/Annual toggle ("Save 10%"). Pro is badged
-   "Most Popular" (yellow card), Max "Best Value" (orange-framed card). See
-   "Pricing Tiers" below for prices + features. The toggle is purely a display
-   choice; the per-card billing note clarifies it (Plus = "Flat rate, no
-   commitment", Pro/Max annual = "billed annually").
+   "Most Popular" (yellow card), Max "Best Value" (orange-framed card). Every card
+   shows a "🛍️ Shop across a multitude of retailers" pill (`.plan-retailers`,
+   rendered once in JSX so it appears on all plans). See "Pricing Tiers" below for
+   prices + features. The toggle is purely a display choice; the per-card billing
+   note clarifies it (Plus = "Flat rate, no commitment", Pro/Max annual = "billed
+   annually").
 8. **FAQ** — 5 accordion items (aria-expanded, animated chevron).
 9. **Footer** — tagline "FetchIt — your shopping best friend", links.
 
@@ -118,11 +130,14 @@ modifier) and the input + Send button are `disabled`/`readOnly`** — the
 conversation auto-plays but the user can't type, send, or buy. The assistant's
 avatar is the **FetchIt logo image** (`.avatar-img`, replacing the old 🐕 emoji).
 
-- **Auto-play on scroll into view** (IntersectionObserver, fires once): one
-  message every 1.2s — FetchIt greeting → user (gift for mom, ~$50) → FetchIt
-  follow-up → user (60, gardening + tea) → FetchIt "give me a sec 🔍" → typing
-  indicator (2s) → 3 product cards. (No buy/send handlers — the component takes
-  no `onRequestSignup` prop anymore.)
+- **Auto-play on scroll into view** (IntersectionObserver, threshold 0.25,
+  **replays on every entry** — the observer is NOT disconnected, so scrolling away
+  and back resets the demo and replays it from the start each time; each replay
+  clears pending timers + empties the message list first): one message every
+  1.2s — FetchIt greeting → user (gift for mom, ~$50) → FetchIt follow-up → user
+  (60, gardening + tea) → FetchIt "give me a sec 🔍" → typing indicator (2s) → 3
+  product cards. (No buy/send handlers — the component takes no `onRequestSignup`
+  prop anymore.)
 - **Product cards** (`ProductCard.js`): horizontally scrollable, colored
   placeholder image (soft greens/browns + emoji), name, price, star rating,
   1-line description, full-width yellow "Buy This 🐕" button (inert here — the
@@ -193,7 +208,10 @@ the browser); per-user access is enforced by Row Level Security, not the client.
 - **Client** — `src/supabaseClient.js` creates the shared `supabase` instance
   with the project URL + anon key (`persistSession`, `autoRefreshToken`,
   `detectSessionInUrl` all on). Sessions live in localStorage under Supabase's
-  own `sb-*` keys and survive tab close/reopen.
+  own `sb-*` keys and survive tab close/reopen. It also defines
+  `terminateAccountSession()` + the `ACCOUNT_TERMINATED_*` constants and a custom
+  `global.fetch` that 401-terminates an admin-deleted user (see "Instant Account
+  Termination").
 - **Auth context** — `src/AuthContext.js` (`AuthProvider` + `useAuth()`) resolves
   the initial session once (async) and stays in sync via `onAuthStateChange`.
   `useAuth()` returns `{ session, loading }`; `session.user.email` is the signed-in
@@ -247,6 +265,10 @@ deletion email via send-email) / `verifyDeleteToken(session, token)` /
 `clearDeleteToken()`, `deleteAccount()` (calls the `delete_user()` RPC then
 signs out), plus
 `sendLoginOtp(email)`/`verifyLoginOtp(email, token)` (login email OTP),
+the account-termination helpers `checkAccountStatus()`/`enforceAccountStatus()`/
+`guardAuthError(error)` + the re-exported `terminateAccountSession()`/
+`ACCOUNT_TERMINATED_KEY`/`ACCOUNT_TERMINATED_MESSAGE` (see "Instant Account
+Termination"),
 the provider/reauth helpers `userProviders(session)`/`hasPasswordIdentity(session)`/
 `isGoogleUser(session)` + `startGoogleReauth(purpose, returnTo)`/
 `consumeReauthResult(purpose)` (see "Reauthentication"),
@@ -511,6 +533,51 @@ for Google users (no password exists — shows the managed-by-Google note).
 **Sign out** (account dropdown → Log Out) calls `signOut()` and redirects to
 `/` (the landing page); the account stays in Supabase so the user can sign back
 in. Visiting `/chat` directly with no session still redirects to `/login`.
+
+## Instant Account Termination (admin-deleted user)
+When an admin deletes a user from the Supabase dashboard, that user's JWT stays
+valid for up to ~1 hour, so they'd otherwise remain logged in. FetchIt detects
+this and force-logs-them-out almost immediately, two complementary ways, both
+funnelling into the single **`terminateAccountSession()`** (in
+`src/supabaseClient.js` — kept there, not `utils.js`, so the guarded fetch can
+use it without a circular import; `utils.js` re-exports it): a hard local
+sign-out (`signOut({ scope: "local" })`), `localStorage.clear()` +
+`sessionStorage.clear()`, then sets the `fetchit_account_terminated`
+sessionStorage flag (after the clear, so it survives) and hard-redirects to
+`/login` (`window.location.assign`, or `reload` if already there). A
+re-entrancy guard runs the teardown once even if many calls fail at once.
+
+- **`supabase/functions/check-account-status/index.ts`** — Deno edge function
+  (service role; no extra secrets — uses the injected `SUPABASE_URL` /
+  `SUPABASE_SERVICE_ROLE_KEY`). Authenticates the caller from their JWT and
+  checks they still exist in `auth.users` (`admin.auth.getUser(token)`, with a
+  secondary `admin.auth.admin.getUserById(sub)` confirm by the decoded `sub`),
+  returning **`{ active: true }`** or **`{ active: false }`**. Deleted users
+  (valid-but-orphaned JWT) → `{ active: false }`. Fails OPEN (`active: true`) on
+  unexpected/transient errors so a glitch never locks legitimate users out.
+  Deploy: `supabase functions deploy check-account-status`.
+- **`AccountStatusWatcher`** (global, in `App.js`, mounted beside
+  `PlanChangeWatcher`) — while logged in, calls `enforceAccountStatus()`
+  (`utils.js`: `checkAccountStatus()` → terminate on a definitive `false`) **on
+  page load, every 60 seconds, and on every tab focus / visibility regain**.
+  Skips the check when the tab is hidden or there's no session.
+- **401 catch-all** — a custom `global.fetch` wrapper in `supabaseClient.js`
+  terminates on a **401** from any PostgREST (`/rest/v1/`) or Edge Function
+  (`/functions/v1/`) call *while a session is stored* — but NOT from `/auth/v1/`
+  (where 400/401/403 are normal during sign-in / OTP / reauth and must not nuke
+  the session). As belt-and-suspenders, `utils.js` data wrappers
+  (`getChats`/`saveChat`/`deleteChat`/`saveOrder`/`getOrders`/`getProfile`/
+  `saveProfile`) also call **`guardAuthError(error)`** in their error branches,
+  which terminates on a 401 / `PGRST301` / JWT / "user not found" error.
+- **Message** — after termination, `/login` reads the
+  `fetchit_account_terminated` flag (`ACCOUNT_TERMINATED_KEY` /
+  `ACCOUNT_TERMINATED_MESSAGE` from `utils.js`, re-exported from
+  `supabaseClient.js`) and shows *"Your account has been terminated. Please
+  contact support if you believe this is an error."* once (the flag is cleared on
+  read).
+- `checkAccountStatus()` / `enforceAccountStatus()` **fail open** (return
+  `active: true`) when logged out or on any transient/network error — only a
+  definitive `{ active: false }` (or 401) terminates.
 
 ## Account Settings — `/account` (`AccountPage.js` / `.css`)
 Reached from the chat account dropdown → "Account Settings". Protected (no
@@ -791,8 +858,11 @@ up front. The marketing copy lives in `Pricing.js` (landing) and `PlansPage.js`
   immediately (see Family Sharing).
 - User-facing features per plan (NO token numbers ever — see "Usage Limits"):
   - **Free:** Auto checkout · Full chat history · Incognito mode · Email order
-    confirmations · Deal alerts · "5 hour sessions, resets every 5 hours"
-  - **Plus:** Everything in Free · "2x more usage than Free" · 5-hour sessions
+    confirmations · Deal alerts · Hassle-free returns · "5 hour sessions, resets
+    every 5 hours"
+  - **Plus:** Everything in Free · "2x more usage than Free" · Order history &
+    spending analytics · Hassle-free returns · Early access to new features ·
+    Priority customer support · 5-hour sessions
   - **Pro:** Everything in Plus · "5x more usage than Free" · Priority AI
     processing · Return tracking · Monthly spending report · Price drop
     notifications · 5-hour sessions
@@ -989,6 +1059,7 @@ supabase/functions/cancel-subscription/index.ts  # cancel subscription at period
 supabase/functions/reactivate-subscription/index.ts  # undo a scheduled cancellation (secret key)
 supabase/functions/create-setup-intent/index.ts  # save a card (SetupIntent, no charge) (secret key)
 supabase/functions/save-card/index.ts  # set default PM + return card brand/last4/exp (secret key)
+supabase/functions/check-account-status/index.ts  # is the caller still in auth.users? { active } (service role)
 supabase/functions/send-email/index.ts  # branded purchase/cancel/reactivate emails via Resend API
 supabase/functions/send-family-invite/index.ts  # Max owner invites a family member (Resend) (secret key)
 supabase/functions/family-invite/index.ts  # invitee side: validate / accept / decline an invite (service role)

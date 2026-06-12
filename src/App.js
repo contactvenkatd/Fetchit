@@ -48,6 +48,7 @@ import {
   getPlan,
   familyOwnerLabel,
   SELF_LEFT_KEY,
+  enforceAccountStatus,
 } from "./utils";
 
 const TOAST_MESSAGE = "FetchIt is on it! We'll be in touch soon.";
@@ -258,6 +259,48 @@ function PlanChangeWatcher() {
   );
 }
 
+// Global account-status watcher. An admin deleting a user from the Supabase
+// dashboard leaves that user's JWT valid for up to ~1h, so they'd stay logged
+// in. This polls the check-account-status edge function — on page load, every
+// 60s, and on every tab focus/visibility regain — and terminates the session
+// (hard sign-out, clear storage, redirect to /login with a message) the moment
+// the user no longer exists. Only runs while logged in; enforceAccountStatus()
+// fails open on transient errors so a network blip never logs anyone out.
+function AccountStatusWatcher() {
+  const { session, loading } = useAuth();
+  const sessionRef = useRef(session);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
+
+  useEffect(() => {
+    if (loading || !session) return undefined;
+
+    let cancelled = false;
+    const check = () => {
+      if (cancelled || !sessionRef.current) return;
+      if (typeof document !== "undefined" && document.visibilityState === "hidden")
+        return;
+      enforceAccountStatus();
+    };
+
+    check(); // on page load / whenever a session appears
+    const interval = setInterval(check, 60000); // every 60s while open
+    const onFocus = () => check();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [session, loading]);
+
+  return null;
+}
+
 // Route a pricing-card click based on login state. Free skips payment.
 export async function routePlanSelection(plan, navigate, session) {
   const loggedIn = !!session;
@@ -422,6 +465,7 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <RecoveryHandler />
+        <AccountStatusWatcher />
         <PlanChangeWatcher />
         <Routes>
         <Route

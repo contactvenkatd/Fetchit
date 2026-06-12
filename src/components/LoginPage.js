@@ -18,6 +18,8 @@ import {
   OAUTH_ERROR_KEY,
   getFamilyInviteToken,
   maybeAcceptPendingInvite,
+  ACCOUNT_TERMINATED_KEY,
+  ACCOUNT_TERMINATED_MESSAGE,
 } from "../utils";
 import "./LoginPage.css";
 
@@ -37,6 +39,7 @@ function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
   const [noAccount, setNoAccount] = useState(false); // Google login, no account
+  const [terminated, setTerminated] = useState(false); // account deleted by admin
 
   // Email-confirmation (reauthentication code) sub-state, after a valid password.
   const [otpSent, setOtpSent] = useState(false);
@@ -64,6 +67,14 @@ function LoginPage() {
     if (sessionStorage.getItem(OAUTH_ERROR_KEY) === "login_noaccount") {
       sessionStorage.removeItem(OAUTH_ERROR_KEY);
       setNoAccount(true);
+    }
+  }, []);
+
+  // Redirected here after an instant termination (admin deleted the account).
+  useEffect(() => {
+    if (sessionStorage.getItem(ACCOUNT_TERMINATED_KEY)) {
+      sessionStorage.removeItem(ACCOUNT_TERMINATED_KEY);
+      setTerminated(true);
     }
   }, []);
 
@@ -365,6 +376,12 @@ function LoginPage() {
         </button>
         <h1>Welcome back</h1>
         <p className="auth-sub">Sign in to keep fetching.</p>
+
+        {terminated && (
+          <p className="field-error" role="alert">
+            {ACCOUNT_TERMINATED_MESSAGE}
+          </p>
+        )}
 
         <GoogleButton onClick={handleGoogle} disabled={googleBusy} />
 

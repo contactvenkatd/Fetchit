@@ -61,6 +61,7 @@ const PLANS = [
       "Incognito mode",
       "Email order confirmations",
       "Deal alerts",
+      "Hassle-free returns",
       "5 hour sessions, resets every 5 hours",
     ],
     style: "ghost",
@@ -74,6 +75,10 @@ const PLANS = [
     features: [
       "Everything in Free",
       "2x more usage than Free",
+      "Order history & spending analytics",
+      "Hassle-free returns",
+      "Early access to new features",
+      "Priority customer support",
       "5 hour sessions, resets every 5 hours",
     ],
     style: "primary",

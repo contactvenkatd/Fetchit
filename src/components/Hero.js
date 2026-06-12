@@ -10,10 +10,32 @@ function Hero({ onSeeHow }) {
           className="hero-logo"
         />
         <span className="badge">🦴 Your AI shopping best friend</span>
-        <h1>Just Tell FetchIt What You Want</h1>
+        <h1>Shop Smarter. Fetch Faster.</h1>
         <p>
-          Chat with FetchIt&apos;s AI, get personalized product picks with
-          reviews, and let FetchIt buy it for you — automatically.
+          Tell FetchIt what you want. It searches Amazon, Walmart, Target, Best
+          Buy, AliExpress and more — then buys it for you automatically.
+        </p>
+        <div className="hero-retailers" aria-label="Shops from Amazon, Walmart, Target, Best Buy, Costco, Home Depot, Lowe's, AliExpress">
+          <span className="hero-retailers-label">Shops from:</span>
+          <ul className="retailer-badges">
+            {[
+              "Amazon",
+              "Walmart",
+              "Target",
+              "Best Buy",
+              "Costco",
+              "Home Depot",
+              "Lowe's",
+              "AliExpress",
+            ].map((r) => (
+              <li className="retailer-badge" key={r}>
+                {r}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="hero-skus">
+          Access to over 20 million SKUs across all retailers
         </p>
         <div className="hero-secondary">
           <button className="btn btn-primary" onClick={onSeeHow}>

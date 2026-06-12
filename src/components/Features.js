@@ -2,6 +2,11 @@ import "./Features.css";
 
 const FEATURES = [
   {
+    icon: "🛍️",
+    title: "Shop Everywhere at Once",
+    text: "FetchIt searches Amazon, Walmart, Target, Best Buy, Costco, Home Depot, Lowe's, AliExpress and more — over 20 million products — to find you the best price then buys it automatically.",
+  },
+  {
     icon: "💬",
     title: "Conversational AI",
     text: "Shop by describing what you want in natural language, no search bars needed.",

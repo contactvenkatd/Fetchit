@@ -1,7 +1,20 @@
 // Shared helpers. Auth, chat history, and order history are backed by Supabase;
 // the early-access email capture (admin/demo) stays in localStorage since it's
 // not tied to a real account.
-import { supabase } from "./supabaseClient";
+import {
+  supabase,
+  terminateAccountSession,
+  ACCOUNT_TERMINATED_KEY,
+  ACCOUNT_TERMINATED_MESSAGE,
+} from "./supabaseClient";
+
+// Re-export so components can pull the termination helpers from utils (the
+// app's single helper module) without reaching into supabaseClient directly.
+export {
+  terminateAccountSession,
+  ACCOUNT_TERMINATED_KEY,
+  ACCOUNT_TERMINATED_MESSAGE,
+};
 
 const STORAGE_KEY = "fetchit_signups";
 
@@ -64,6 +77,70 @@ export async function signIn(email, password) {
 
 export async function signOut() {
   return supabase.auth.signOut();
+}
+
+// ---------------------------------------------------------------------------
+// Instant account termination (admin-deleted user).
+// A user deleted from the Supabase dashboard keeps a valid JWT for up to ~1h, so
+// they'd stay "logged in". We detect that two ways and both call
+// terminateAccountSession() (defined in supabaseClient.js): the
+// check-account-status edge function (polled by App.js's AccountStatusWatcher on
+// load / every 60s / on focus) and a 401 from any data/function call (the guarded
+// fetch in supabaseClient.js + guardAuthError() below in each data wrapper).
+// ---------------------------------------------------------------------------
+
+// Ask the edge function whether the signed-in user still exists in auth.users.
+// Returns true (active) when logged out or on any transient/unknown error — we
+// only return false on an explicit { active: false } / 401 so a glitch never
+// locks legitimate users out (the App.js watcher only acts on a definitive false).
+export async function checkAccountStatus() {
+  const { data: sessData } = await supabase.auth.getSession();
+  const token = sessData?.session?.access_token;
+  if (!token) return true; // not logged in — nothing to verify
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      "check-account-status",
+    );
+    if (error) {
+      const status = (error.context && error.context.status) || error.status;
+      if (status === 401) return false; // token/user no longer valid
+      return true; // network/transient — fail open
+    }
+    return data?.active !== false;
+  } catch {
+    return true; // fail open
+  }
+}
+
+// Convenience: check + terminate. Used by the global watcher. Returns the
+// active boolean so callers can branch if needed.
+export async function enforceAccountStatus() {
+  const active = await checkAccountStatus();
+  if (!active) terminateAccountSession();
+  return active;
+}
+
+// Inspect a Supabase error; if it signals the JWT/user is no longer valid (a 401
+// or a "user not found" / JWT error), the account was almost certainly deleted
+// server-side → terminate the session. Returns true if it handled (terminated).
+// Called from the data wrappers below as a belt-and-suspenders to the global
+// guarded fetch in supabaseClient.js.
+export function guardAuthError(error) {
+  if (!error) return false;
+  const status = error.status || error.code;
+  const msg = (error.message || "").toLowerCase();
+  const isAuthFailure =
+    status === 401 ||
+    status === "401" ||
+    status === "PGRST301" || // PostgREST: JWT expired / invalid
+    /\bjwt\b|not authenticated|user(_|\s).*not.*found|user not found|invalid token/.test(
+      msg,
+    );
+  if (isAuthFailure) {
+    terminateAccountSession();
+    return true;
+  }
+  return false;
 }
 
 // ---------------------------------------------------------------------------
@@ -1117,6 +1194,7 @@ export async function getProfile() {
     .select("*")
     .maybeSingle();
   if (error) {
+    guardAuthError(error);
     console.error("getProfile failed:", error.message);
     return null;
   }
@@ -1152,6 +1230,7 @@ export async function saveProfile(fields) {
     .from("profiles")
     .upsert(row, { onConflict: "user_id" });
   if (error) {
+    guardAuthError(error);
     console.error("saveProfile failed:", error.message);
     return { error: { message: error.message } };
   }
@@ -1373,6 +1452,7 @@ export async function getChats() {
     .select("*")
     .order("created_at", { ascending: false });
   if (error) {
+    guardAuthError(error);
     console.error("getChats failed:", error.message);
     return [];
   }
@@ -1388,6 +1468,7 @@ export async function saveChat(chat) {
     .select()
     .single();
   if (error) {
+    guardAuthError(error);
     console.error("saveChat failed:", error.message);
     return null;
   }
@@ -1396,7 +1477,10 @@ export async function saveChat(chat) {
 
 export async function deleteChat(chatId) {
   const { error } = await supabase.from("chats").delete().eq("id", chatId);
-  if (error) console.error("deleteChat failed:", error.message);
+  if (error) {
+    guardAuthError(error);
+    console.error("deleteChat failed:", error.message);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1454,7 +1538,10 @@ export async function saveOrder({
     zinc_order_id: zincOrderId,
     status,
   });
-  if (error) console.error("saveOrder failed:", error.message);
+  if (error) {
+    guardAuthError(error);
+    console.error("saveOrder failed:", error.message);
+  }
 }
 
 const mapOrder = (row) => ({
@@ -1479,6 +1566,7 @@ export async function getOrders() {
     .select("*")
     .order("created_at", { ascending: false });
   if (error) {
+    guardAuthError(error);
     console.error("getOrders failed:", error.message);
     return [];
   }

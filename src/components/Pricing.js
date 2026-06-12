@@ -22,6 +22,7 @@ const PLANS = [
       "Incognito mode",
       "Email order confirmations",
       "Deal alerts",
+      "Hassle-free returns",
       "5 hour sessions, resets every 5 hours",
     ],
     cta: "Get Started",
@@ -36,6 +37,10 @@ const PLANS = [
     features: [
       "Everything in Free",
       "2x more usage than Free",
+      "Order history & spending analytics",
+      "Hassle-free returns",
+      "Early access to new features",
+      "Priority customer support",
       "5 hour sessions, resets every 5 hours",
     ],
     cta: "Try Plus",
@@ -140,6 +145,9 @@ function Pricing({ onSelect }) {
                 </div>
                 <p className="plan-billing-note">{note}</p>
                 <p className="plan-blurb">{plan.blurb}</p>
+                <p className="plan-retailers">
+                  🛍️ Shop across a multitude of retailers
+                </p>
                 <ul>
                   {plan.features.map((f) => (
                     <li key={f}>{f}</li>
