@@ -872,8 +872,18 @@ customer + subscription).
   immediate `subscriptions.cancel`) and `exceptSubscriptionId` (skip one — the
   brand-new sub during a plan change). Returns `{ ok, canceled, periodEnd }`.
 - **`supabase/functions/reactivate-subscription/index.ts`** — Deno edge function
-  (reuses `STRIPE_SECRET_KEY`). Clears `cancel_at_period_end` on the caller's
-  subscriptions to undo a scheduled cancellation. Returns `{ ok, reactivated }`.
+  (reuses `STRIPE_SECRET_KEY`; Verify JWT ON). Undoes a scheduled cancellation
+  end-to-end: (1) auth from JWT; (2/3) finds the caller's subscription(s) via the
+  stored `stripe_customer_id` and clears `cancel_at_period_end` in Stripe; (4)
+  **clears `plan_cancels_at` in `user_metadata`** so getPlan() keeps returning the
+  paid plan (restores the previous plan — the `plan` field is unchanged); (5) if a
+  family disband was scheduled (Max owner with members whose `pending_disband_at`
+  is set), **calls `family-manage` `unschedule`** (function-to-function, passing
+  the owner's JWT) to restore members' access. Returns
+  `{ ok, reactivated, plan, familyRestored }`. (NB: `utils.js`
+  `reactivateSubscription()` still clears `plan_cancels_at` locally + sends the
+  email + calls `unscheduleFamilyDisband()` — those are now idempotent overlaps
+  that also refresh the local session.)
 - **`supabase/functions/create-setup-intent/index.ts`** — Deno edge function
   (reuses `STRIPE_SECRET_KEY`). **Saves a card without charging** (Delivery &
   Payment step + Cards & Address "update card"). Authenticates the caller, reuses
