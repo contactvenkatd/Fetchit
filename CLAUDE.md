@@ -97,9 +97,12 @@ email). See "Transactional Email" below.
    automatically; a **"Shops from:" retailer-badges row** (`.hero-retailers` /
    `.retailer-badge` — charcoal pills with a yellow border, listing all 8
    Zinc-supported retailers: Amazon, Walmart, Target, Best Buy, Costco, Home
-   Depot, Lowe's, AliExpress) below the subheading, followed by a muted "Access to
-   over 20 million SKUs across all retailers" line (`.hero-skus`); a single "See
-   How It Works" button that scrolls to the How It Works section.
+   Depot, Lowe's, AliExpress) below the subheading, then a subtle "Powered by
+   Grok 4.3 — xAI's advanced reasoning model" trust-signal pill (`.hero-grok` —
+   small charcoal pill, light-gray text, understated, NOT a prominent feature),
+   followed by a muted "Access to over 20 million SKUs across all retailers" line
+   (`.hero-skus`); a single "See How It Works" button that scrolls to the How It
+   Works section.
 3. **Meet FetchIt AI** (`ChatMockup`) — view-only mock chat UI (see below).
 4. **How It Works** — 3 steps: Chat with FetchIt AI → Pick from AI-Curated
    Recommendations → FetchIt Buys It For You.
@@ -119,7 +122,9 @@ email). See "Transactional Email" below.
    note clarifies it (Plus = "Flat rate, no commitment", Pro/Max annual = "billed
    annually").
 8. **FAQ** — 5 accordion items (aria-expanded, animated chevron).
-9. **Footer** — tagline "FetchIt — your shopping best friend", links.
+9. **Footer** — tagline "FetchIt — your shopping best friend", links (the
+   section nav plus **Terms of Service** → `/tos` and **Privacy Policy** →
+   `/privacy-policy`).
 
 ## Meet FetchIt AI — Chat Mockup (`ChatMockup.js` / `.css`)
 A fully mocked (no real AI), **view-only** chat inside browser-window chrome
@@ -172,6 +177,8 @@ is per-browser.
 - `/terms` — `TermsAgreementPage` (protected onboarding step: TOS summary +
   agreement checkbox; after email verification, before `/plans`)
 - `/tos` — `TosPage` (full Terms of Service; **public**, no login required)
+- `/privacy-policy` — `PrivacyPolicyPage` (full Privacy Policy; **public**, no
+  login required — same dark shell/prose styling as `/tos`)
 - `/plans` — `PlansPage`, wrapped in `PlansGate` (logged out → `/login`; logged
   in with no plan yet → show; logged in with a plan → `/chat`, unless navigated
   with `state.manage` for an intentional plan change)
@@ -352,7 +359,9 @@ Flow:
    train AI models · 18+ only · orders via third-party retailers — NOT the full
    TOS), a "Read full Terms of Service ↗" link opening **`/tos`** in a new tab, and
    a single agreement **checkbox** ("I have read and agree to the Terms of Service
-   and Privacy Policy"). No scrolling required. **Continue** is disabled until the
+   and Privacy Policy" — "Terms of Service" links to **`/tos`** and "Privacy
+   Policy" to **`/privacy-policy`**, both opening in a new tab). No scrolling
+   required. **Continue** is disabled until the
    box is checked → `saveProfile({ tosAccepted: true, tosAcceptedAt })` (creates
    the `profiles` row) → `/plans`.
 5. **Plans** (`/plans`, gated by `PlansGate`): "Choose your plan" + the 4 tiers
@@ -408,7 +417,8 @@ Flow:
    Settings** → `/account`, **Cards & Address** → `/cards-address`, **Family
    Sharing** → `/family-sharing` (Max owners AND `max_family` members), **Orders &
    Analytics** →
-   `/orders`, **Log Out**, and **Terms of Service** → `/tos` at the very bottom);
+   `/orders`, **Log Out**, then **Terms of Service** → `/tos` and **Privacy
+   Policy** → `/privacy-policy` at the very bottom);
    a hamburger appears ≤768px to toggle
    the sidebar as an animated
    overlay. Empty state: 🐕 + "What can we get you?" + 3 suggestion chips. Fixed
@@ -1095,6 +1105,7 @@ src/
     ├── ResetPasswordPage.js/.css # /reset-password — set new password via link
     ├── TermsAgreementPage.js/.css # /terms — TOS summary + agreement checkbox (onboarding)
     ├── TosPage.js/.css        # /tos — full Terms of Service (public)
+    ├── PrivacyPolicyPage.js   # /privacy-policy — full Privacy Policy (public, reuses TosPage.css)
     ├── PlansPage.js/.css      # /plans (reuses Pricing.css card styles)
     ├── CheckoutPage.js/.css   # /checkout — real Stripe Elements form + success
     ├── DeliveryPaymentPage.js/.css # /delivery-payment — shipping address + saved card (onboarding)

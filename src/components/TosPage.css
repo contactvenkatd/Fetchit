@@ -27,6 +27,13 @@
   color: var(--yellow);
   margin: 1.8rem 0 0.5rem;
 }
+.tos-content h3 {
+  font-family: "Baloo 2", sans-serif;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: var(--white);
+  margin: 1.2rem 0 0.4rem;
+}
 .tos-content p {
   margin-bottom: 0.9rem;
 }

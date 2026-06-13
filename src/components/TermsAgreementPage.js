@@ -72,7 +72,14 @@ function TermsAgreementPage() {
             onChange={(e) => setAgreed(e.target.checked)}
           />
           <span>
-            I have read and agree to the Terms of Service and Privacy Policy
+            I have read and agree to the{" "}
+            <a href="/tos" target="_blank" rel="noopener noreferrer">
+              Terms of Service
+            </a>{" "}
+            and{" "}
+            <a href="/privacy-policy" target="_blank" rel="noopener noreferrer">
+              Privacy Policy
+            </a>
           </span>
         </label>
 

@@ -558,6 +558,9 @@ function ChatPage() {
                     <button role="menuitem" onClick={() => navigate("/tos")}>
                       Terms of Service
                     </button>
+                    <button role="menuitem" onClick={() => navigate("/privacy-policy")}>
+                      Privacy Policy
+                    </button>
                   </div>
                 )}
               </div>

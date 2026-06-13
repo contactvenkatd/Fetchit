@@ -34,6 +34,9 @@ function Hero({ onSeeHow }) {
             ))}
           </ul>
         </div>
+        <span className="hero-grok">
+          Powered by Grok 4.3 — xAI&apos;s advanced reasoning model
+        </span>
         <p className="hero-skus">
           Access to over 20 million SKUs across all retailers
         </p>

@@ -58,3 +58,11 @@
   accent-color: var(--orange);
   cursor: pointer;
 }
+.tos-agree-check a {
+  color: var(--orange);
+  font-weight: 800;
+  text-decoration: underline;
+}
+.tos-agree-check a:hover {
+  color: var(--charcoal);
+}

@@ -26,6 +26,7 @@ import LoginPage from "./components/LoginPage";
 import PlansPage from "./components/PlansPage";
 import TermsAgreementPage from "./components/TermsAgreementPage";
 import TosPage from "./components/TosPage";
+import PrivacyPolicyPage from "./components/PrivacyPolicyPage";
 import CheckoutPage from "./components/CheckoutPage";
 import DeliveryPaymentPage from "./components/DeliveryPaymentPage";
 import OnboardingPage from "./components/OnboardingPage";
@@ -503,6 +504,7 @@ function App() {
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/terms" element={<TermsAgreementPage />} />
         <Route path="/tos" element={<TosPage />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
         <Route path="/delivery-payment" element={<DeliveryPaymentPage />} />
         <Route path="/onboarding" element={<OnboardingPage />} />

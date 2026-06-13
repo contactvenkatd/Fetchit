@@ -4,7 +4,7 @@ const STEPS = [
   {
     emoji: "💬",
     title: "Chat with FetchIt AI",
-    text: "Describe what you need in plain English. FetchIt asks smart follow-up questions to nail down exactly what you want.",
+    text: "Powered by Grok 4.3, describe what you need in plain English. FetchIt asks smart follow-up questions to nail down exactly what you want.",
   },
   {
     emoji: "🛍️",

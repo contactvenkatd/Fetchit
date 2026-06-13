@@ -26,6 +26,8 @@ function Footer({ onNavigate }) {
           <a href="#faq" onClick={(e) => handleNav(e, "faq")}>
             FAQ
           </a>
+          <a href="/tos">Terms of Service</a>
+          <a href="/privacy-policy">Privacy Policy</a>
         </nav>
         <p className="footer-copy">
           © 2026 FetchIt. Made with 🧡 for happy shoppers.
