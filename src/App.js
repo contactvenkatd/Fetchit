@@ -307,7 +307,7 @@ export async function routePlanSelection(plan, navigate, session) {
   const loggedIn = !!session;
   if (plan.name === "Free") {
     if (loggedIn) {
-      await finalizePlan("Free");
+      await finalizePlan("Free", null, "explicit-free-selection");
       navigate("/chat");
     } else {
       setPendingPlan({ name: "Free" });

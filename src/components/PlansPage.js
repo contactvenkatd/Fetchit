@@ -165,7 +165,7 @@ function PlansPage() {
         return;
       }
       if (loggedIn) {
-        await finalizePlan("Free");
+        await finalizePlan("Free", null, "explicit-free-selection");
         navigate("/delivery-payment");
       } else {
         setPendingPlan({ name: "Free" });

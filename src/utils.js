@@ -550,23 +550,51 @@ export async function sendPlanEmail(payload) {
 // Normalizes the plan name, sets family_members (Max includes up to 5), and for
 // paid plans stamps the billing period + start date so we can show the next
 // billing date on the account page (no backend round-trip needed).
-export async function finalizePlan(plan, billing) {
+//
+// finalizePlan is the **only** client-side writer of user_metadata.plan, so
+// every client-driven plan change funnels through here (Stripe checkout, an
+// explicit Free selection). `reason` names the exact trigger and is logged with
+// the before→after so any unexpected change is traceable (rule 5). It MUST be one
+// of the allowed triggers — see "Plan Change Rules" in CLAUDE.md. (The only other
+// plan writers are the family edge functions: accept → max_family, leave/remove/
+// disband → Free. No session refresh, watcher, webhook, or other edge function
+// ever writes plan.)
+export async function finalizePlan(plan, billing, reason = "unspecified") {
   const key = planKey(plan); // Free | Plus | Pro | Max
   const paid = key !== "Free";
+
+  // Capture the prior plan/billing BEFORE the write so we can log exactly what
+  // changed and what triggered it. Uses the RAW stored plan (planKey on the
+  // metadata), not getPlan(), so the log reflects the literal field being
+  // overwritten — not the grace-period-adjusted effective plan.
+  const prevSession = await getSession();
+  const prevMeta =
+    (prevSession && prevSession.user && prevSession.user.user_metadata) || {};
+  const fromPlan = planKey(prevMeta.plan);
+  const fromBilling = prevMeta.plan_billing || null;
+  const toBilling = paid ? (billing === "annual" ? "annual" : "monthly") : null;
+
+  // ---- Plan-change audit log (rule 5) -------------------------------------
+  console.info("[finalizePlan] plan change", {
+    reason,
+    from: { plan: fromPlan, billing: fromBilling },
+    to: { plan: key, billing: toBilling },
+    changed: fromPlan !== key || fromBilling !== toBilling,
+  });
+
   await supabase.auth.updateUser({
     data: {
       plan: key,
       // Max includes family sharing (up to 5 members); 0 on every other plan.
       family_members: key === "Max" ? 5 : 0,
       // Billing period + start (cleared on Free) — drives nextBillingDate().
-      plan_billing: paid ? (billing === "annual" ? "annual" : "monthly") : null,
+      plan_billing: toBilling,
       plan_started_at: paid ? new Date().toISOString() : null,
       // Activating any plan clears a prior scheduled cancellation.
       plan_cancels_at: null,
     },
   });
-  const session = await getSession();
-  const email = session && session.user && session.user.email;
+  const email = prevSession && prevSession.user && prevSession.user.email;
   if (email) saveSignup({ email, plan: key });
   // NB: confirmation emails are NOT sent here. CheckoutPage sends the right one
   // (purchase / upgrade-welcome / downgrade / billing_change) after payment, so

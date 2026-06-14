@@ -138,8 +138,11 @@ function CheckoutForm({ plan }) {
       return;
     }
     if (paymentIntent && ["succeeded", "processing"].includes(paymentIntent.status)) {
-      // 3. Record the new plan (+ billing period) on the user.
-      await finalizePlan(plan.name, billing);
+      // 3. Record the new plan (+ billing period) on the user. Plan changes
+      //    take effect IMMEDIATELY here — right after Stripe confirms payment
+      //    (rule 4: no delay, no waiting for the billing period). The trigger is
+      //    the detected change type (purchase / upgrade / downgrade / billing_change).
+      await finalizePlan(plan.name, billing, `checkout:${change.type}`);
 
       // 4. For a change (not a first purchase), cancel the OLD subscription —
       //    immediately for an upgrade / billing switch, at period end for a

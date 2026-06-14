@@ -141,7 +141,7 @@ function LoginPage() {
     if (pending) {
       clearPendingPlan();
       if (pending.name === "Free") {
-        await finalizePlan("Free");
+        await finalizePlan("Free", null, "pending-free-resume");
         sessionStorage.removeItem("fetchit_login_pending");
         navigate("/delivery-payment");
       } else {

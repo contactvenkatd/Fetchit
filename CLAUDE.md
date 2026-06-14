@@ -208,6 +208,98 @@ is per-browser.
 (works across tab close/reopen since the session lives in localStorage). Sign-in
 pages are only reachable when logged out.
 
+## Persistence Guarantees
+The app is built so a user **stays logged in and on their plan indefinitely**
+until one of a small set of explicit events. The guarantees and where they're
+enforced:
+
+- **Session never silently expires.** `supabaseClient.js` sets
+  `persistSession: true` + `autoRefreshToken: true`, so the session lives in
+  localStorage under `sb-*` keys and survives tab close, browser restart, and
+  device restart; tokens auto-refresh in the background. On app load
+  `AuthContext` restores it (`getSession()`) and then does a one-time
+  `refreshSession()` (load-time health check — see "Auth context"). A user is
+  logged out **only** when they (a) explicitly sign out (`signOut()` → `/`),
+  (b) have their account admin-deleted (→ instant termination, see "Instant
+  Account Termination"), or (c) present a definitively expired/revoked refresh
+  token. Transient/network errors **fail open** everywhere (the cached session is
+  kept; `checkAccountStatus()`/`enforceAccountStatus()` return `active: true`).
+- **Plan lives in `user_metadata`, server-side, forever.** `finalizePlan()` is
+  the only writer of `user_metadata.plan` (+ `family_members`, `plan_billing`,
+  `plan_started_at`, and `plan_cancels_at: null`). `getPlan(session)` is the
+  single read path everywhere (token limits, account card, `/plans`, family
+  checks). Nothing stores the plan in localStorage/sessionStorage. The plan
+  resets to **Free only** when: (a) a scheduled cancellation's `plan_cancels_at`
+  passes (computed client-side by `getPlan`, no webhook), (b) the account is
+  admin-terminated, (c) a `max_family` member's `family_disband_at` passes (lazy
+  disband → `familyDisbandDue` → `leaveFamily`), or (d) the user explicitly
+  downgrades / leaves the family. The only code paths that write `plan: "Free"`
+  are explicit user choices (`App.js routePlanSelection`, `LoginPage`/`PlansPage`
+  Free selection) and the family-edge-function flows — there is no stray reset.
+- **Billing pointers never lost.** `stripe_customer_id` is persisted to
+  `user_metadata` by the `create-subscription` / `create-setup-intent` edge
+  functions (reused across visits so a returning user never gets a duplicate
+  customer); `stripe_payment_method_id` + display `card_*` columns live in the
+  `profiles` table. Subscriptions renew automatically via Stripe until cancelled.
+  A **failed payment does not downgrade** — `CheckoutPage` calls `finalizePlan`
+  only when the PaymentIntent is `succeeded`/`processing`; on failure it shows the
+  Stripe error and leaves the existing plan/metadata untouched.
+- **`max_family` persists like any other plan** — it's a normal
+  `user_metadata.plan` value with the same token limits as Max; it only changes
+  on explicit leave/remove or the owner's disband (immediate or lazy via
+  `family_disband_at`). `PlanChangeWatcher` refreshes a member's session on
+  load/focus so a server-side removal is reflected promptly.
+
+### Plan Change Rules (iron-clad invariant)
+`user_metadata.plan` is the single source of truth for the plan. It is written
+in **exactly five** places and **never** anywhere else — there is no other code
+path, background process, session refresh, webhook, or edge function that mutates
+it:
+
+| Writer | Sets plan to | Triggered by | Timing |
+|--------|--------------|--------------|--------|
+| `finalizePlan()` (client, `utils.js`) | Free / Plus / Pro / Max | Stripe checkout completes (`CheckoutPage`), or an explicit Free selection (`/plans`, landing, login-resume) | **Immediate** (after Stripe confirms) |
+| `family-invite` accept (edge) | `max_family` | user explicitly accepts a family invite | Immediate |
+| `family-manage` `leave` (edge) | Free | user voluntarily leaves a family | Immediate |
+| `family-manage` `downgradeNow` (edge) | Free | Max owner removes a member, or owner changes plan off Max (immediate disband) | Immediate |
+| lazy disband (`getPlan` + `familyDisbandDue → leaveFamily`) | Free | Max owner cancelled; `family_disband_at` (= owner's period end) has passed | **At period end** |
+
+**A plan change happens ONLY when:** (1) the user selects a new plan on `/plans`
+and completes Stripe checkout; (2) a cancelled subscription's billing period ends
+(`plan_cancels_at` passes); (3) the account is admin-terminated; (4) a Max owner
+cancels and the lazy disband fires at period end; (5) the user voluntarily leaves
+a family plan.
+
+**The plan STAYS THE SAME** across: opening the app on a new device, clearing the
+browser cache, session expiry + re-login, app restart / hot reload, tab switches,
+the load-time / focus background `refreshSession()`, any edge function not in the
+table above (`create-subscription` / `create-setup-intent` / `save-card` /
+`cancel-subscription` / `reactivate-subscription` only touch `stripe_customer_id`
+and `plan_cancels_at` — never `plan`), network errors/timeouts (every guard fails
+open), and any Stripe webhook other than the cancellation-period-end (downgrade is
+computed client-side from `plan_cancels_at`, not driven by a webhook).
+
+**Downgrade timing (cancel).** `cancelSubscription()` sets
+`user_metadata.plan_cancels_at` = the Stripe period end and **does not change
+`plan`**. `getPlan(session)` returns the paid plan until `Date.now() >=
+plan_cancels_at`, then returns Free — so the user keeps full access until the end
+of the billing period and is **never downgraded early**. The downgrade is purely
+date-computed client-side; no webhook needed. (Same shape for `max_family`'s
+`family_disband_at`.)
+
+**Upgrade timing.** Upgrades take effect **immediately** — `CheckoutPage` calls
+`finalizePlan(plan, billing, "checkout:upgrade")` the moment the PaymentIntent is
+`succeeded`/`processing`, which writes the new `plan` and clears
+`plan_cancels_at`. No delay, no waiting for a billing boundary.
+
+**Audit log (debugging).** `finalizePlan(plan, billing, reason)` takes a `reason`
+naming the exact trigger and logs `[finalizePlan] plan change { reason, from:{plan,
+billing}, to:{plan,billing}, changed }` before writing — so any unexpected change
+is traceable to its caller. Current reasons: `checkout:<purchase|upgrade|downgrade|
+billing_change>`, `explicit-free-selection`, `pending-free-resume`. A failed Stripe
+payment **never** reaches `finalizePlan` (CheckoutPage returns on `payError`), so a
+declined card never changes the plan.
+
 ## Supabase Backend
 Real auth + data persistence via Supabase. Everything client-side (anon key in
 the browser); per-user access is enforced by Row Level Security, not the client.
@@ -220,11 +312,19 @@ the browser); per-user access is enforced by Row Level Security, not the client.
   `global.fetch` that 401-terminates an admin-deleted user (see "Instant Account
   Termination").
 - **Auth context** — `src/AuthContext.js` (`AuthProvider` + `useAuth()`) resolves
-  the initial session once (async) and stays in sync via `onAuthStateChange`.
-  `useAuth()` returns `{ session, loading }`; `session.user.email` is the signed-in
-  email, `session.user.user_metadata` holds `plan`, `first_name`, `last_name`.
-  Components must wait for `loading` to be false before treating "no session" as
-  logged-out.
+  the initial session once (async, via `getSession()` — reads the cached session
+  from localStorage) and stays in sync via `onAuthStateChange`. **Load-time health
+  check:** right after restoring the cached session it fires a one-time
+  background `supabase.auth.refreshSession()` so the freshest server-side
+  `user_metadata` (plan, billing, family status) is pulled even if it changed
+  while the tab was closed; the refresh emits `TOKEN_REFRESHED` back through
+  `onAuthStateChange` to update `session` in place. It **fails open** — a
+  transient/network error never drops the valid cached session; only a
+  definitively expired/revoked refresh token logs the user out (surfaced as
+  `SIGNED_OUT`). `useAuth()` returns `{ session, loading }`;
+  `session.user.email` is the signed-in email, `session.user.user_metadata` holds
+  `plan`, `first_name`, `last_name`. Components must wait for `loading` to be
+  false before treating "no session" as logged-out.
 - **Email verification** is ON: `signUp()` returns no session until the user
   clicks the confirmation link (`emailRedirectTo` = `<origin>/terms`).
   `SignupPage` shows a "Check your email 🐕" screen instead of advancing.
