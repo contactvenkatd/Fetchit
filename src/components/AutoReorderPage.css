@@ -1,0 +1,190 @@
+/* Auto-Reorder — dark charcoal shell (shares .account-page / top bar with
+   AccountPage.css), yellow FetchIt accents. */
+.ar-wrap {
+  width: 100%;
+  max-width: 720px;
+}
+.ar-heading {
+  font-family: "Baloo 2", sans-serif;
+  font-size: 1.5rem;
+  font-weight: 800;
+  margin-bottom: 1.2rem;
+}
+
+.ar-loading {
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+}
+
+/* ---------- Empty state ---------- */
+.ar-empty {
+  background: #1f1f1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius);
+  padding: 2.6rem 1.5rem;
+  text-align: center;
+}
+.ar-empty-icon {
+  font-size: 2.6rem;
+  line-height: 1;
+  margin-bottom: 0.8rem;
+}
+.ar-empty-title {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--white);
+  margin-bottom: 1.3rem;
+  line-height: 1.4;
+}
+
+/* ---------- Cards ---------- */
+.ar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.9rem;
+}
+.ar-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background: #1f1f1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 1.1rem 1.2rem;
+  transition: border-color 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+.ar-card:hover {
+  border-color: rgba(255, 215, 0, 0.45);
+  transform: translateY(-2px);
+}
+.ar-card.is-paused {
+  opacity: 0.62;
+}
+.ar-thumb {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  font-size: 1.9rem;
+  border-radius: 14px;
+  background: #2a2a2a;
+}
+.ar-body {
+  flex: 1;
+  min-width: 0;
+}
+.ar-name {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: var(--white);
+  margin: 0;
+}
+.ar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0.3rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+.ar-freq {
+  background: rgba(255, 215, 0, 0.16);
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  color: var(--yellow);
+  font-weight: 800;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+}
+.ar-meta span:not(.ar-freq):not(:last-child)::after {
+  content: "·";
+  margin-left: 0.5rem;
+  color: rgba(255, 255, 255, 0.3);
+}
+.ar-next {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.ar-paused-label {
+  color: var(--orange);
+}
+
+/* ---------- Actions: pause/resume toggle + delete ---------- */
+.ar-actions {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.6rem;
+}
+.ar-toggle {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.18);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.18s ease;
+}
+.ar-toggle.active {
+  background: #4caf7d;
+}
+.ar-toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--white);
+  transition: transform 0.18s ease;
+}
+.ar-toggle.active .ar-toggle-knob {
+  transform: translateX(20px);
+}
+.ar-delete {
+  background: transparent;
+  border: 1.5px solid rgba(255, 107, 107, 0.55);
+  color: #ff8a8a;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.ar-delete:hover {
+  background: rgba(255, 107, 107, 0.14);
+  color: #ffb0b0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ar-card:hover {
+    transform: none;
+  }
+  .ar-toggle,
+  .ar-toggle-knob {
+    transition: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .ar-card {
+    flex-wrap: wrap;
+  }
+  .ar-actions {
+    flex-direction: row;
+    align-items: center;
+  }
+}

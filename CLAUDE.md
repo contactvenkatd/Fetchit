@@ -200,6 +200,10 @@ is per-browser.
 - `/join-family` — `JoinFamilyPage` (invite landing `?token=…`; **public** —
   validates the token, then create-account / log-in / accept / decline)
 - `/orders` — `OrdersAnalytics` (protected: spend analytics + order history)
+- `/wishlist` — `WishlistPage` (protected: saved products to buy later — see
+  "Wishlist")
+- `/auto-reorder` — `AutoReorderPage` (protected: recurring purchase schedules —
+  see "Auto-Reorder")
 - `/admin` — `AdminPage` (hidden signups dashboard)
 - `*` — falls back to the landing page
 
@@ -333,16 +337,19 @@ the browser); per-user access is enforced by Row Level Security, not the client.
   plan (`PlansGate` shows it because the new user has no plan yet). Add
   `<origin>/terms` to the allowed Redirect URLs.
 - **`supabase/schema.sql`** — the `chats`, `orders`, `sessions`, `weekly_usage`,
-  `profiles`, `family_invites`, and `family_members` tables + RLS policies, plus
-  the `delete_user()` RPC (SECURITY DEFINER, deletes `auth.uid()`; chats, orders,
-  sessions, weekly usage, profile, and family invites/memberships cascade). Run it
-  once in the Supabase SQL editor. `user_id` defaults to `auth.uid()`, so the
-  client never sends it. (`sessions` + `weekly_usage` back the per-plan token/usage
-  limits — see "Usage Limits". `family_invites` / `family_members` are RLS-scoped
-  to `owner_id` and back Family Sharing — see that section.
-  `profiles` holds the shipping address + Stripe customer/card pointers + TOS
-  acceptance (`tos_accepted` / `tos_accepted_at`, written at the `/terms` step) —
-  one row per user, keyed by `user_id`, written across the `/terms` and Delivery &
+  `profiles`, `wishlists`, `auto_reorders`, `family_invites`, and `family_members`
+  tables + RLS policies, plus the `delete_user()` RPC (SECURITY DEFINER, deletes
+  `auth.uid()`; chats, orders, sessions, weekly usage, profile, wishlists,
+  auto-reorders, and family invites/memberships cascade). Run it once in the
+  Supabase SQL editor. `user_id` defaults to `auth.uid()`, so the client never
+  sends it. (`sessions` + `weekly_usage` back the per-plan token/usage limits — see
+  "Usage Limits". `family_invites` / `family_members` are RLS-scoped to `owner_id`
+  and back Family Sharing — see that section. `wishlists` backs the Wishlist page
+  and `auto_reorders` the Auto-Reorder page (both RLS-scoped per user — see those
+  sections). `profiles` holds the shipping address + Stripe customer/card pointers +
+  TOS acceptance (`tos_accepted` / `tos_accepted_at`, written at the `/terms` step)
+  + the **order streak** (`order_streak` / `last_order_week` — see "Order Streaks")
+  — one row per user, keyed by `user_id`, written across the `/terms` and Delivery &
   Payment steps and edited on `/cards-address`.)
 
 `src/utils.js` auth/data helpers (all async, thin wrappers over Supabase):
@@ -380,7 +387,13 @@ the provider/reauth helpers `userProviders(session)`/`hasPasswordIdentity(sessio
 `isGoogleUser(session)` + `startGoogleReauth(purpose, returnTo)`/
 `consumeReauthResult(purpose)` (see "Reauthentication"),
 `getChats()`/`saveChat(chat)`/`deleteChat(id)`, `saveOrder({productName, price,
-category, …})`/`getOrders()`, the address/card helpers `createSetupIntent()`/
+category, …})` (also bumps the order streak)/`getOrders()`/`getOrderStreak()` (see
+"Order Streaks"), the wishlist helpers `getWishlist()`/`addWishlistItem(fields)`/
+`removeWishlistItem(id)` (see "Wishlist") and the auto-reorder helpers
+`getAutoReorders()`/`addAutoReorder(fields)`/`setAutoReorderActive(id, active)`/
+`deleteAutoReorder(id)` + `FREQUENCY_OPTIONS`/`frequencyLabel(key)`/
+`nextOrderDate(frequency, from)` (see "Auto-Reorder"), the address/card helpers
+`createSetupIntent()`/
 `saveCard(pmId)` and `getProfile()`/`saveProfile(fields)` (the `profiles` table),
 the family-sharing helpers `isMaxOwner(session)`/`isFamilyMember(session)`/
 `planDisplayName(plan)`/`familyOwnerLabel(session)`/`familyDisbandAt(session)`/
@@ -514,18 +527,26 @@ Flow:
    truncated to 40 chars, date/time, hover-reveal trash to delete with confirm),
    and an "🕵️ Incognito" button at the bottom. Top bar: logo + account dropdown
    (shows "Hi, &lt;First Name&gt; 👋", or the email if no name; menu has **Account
-   Settings** → `/account`, **Cards & Address** → `/cards-address`, **Family
-   Sharing** → `/family-sharing` (Max owners AND `max_family` members), **Orders &
-   Analytics** →
-   `/orders`, **Log Out**, then **Terms of Service** → `/tos` and **Privacy
-   Policy** → `/privacy-policy` at the very bottom);
+   Settings** → `/account`, **Cards & Address** → `/cards-address`, **Orders &
+   Analytics** → `/orders`, **Wishlist** → `/wishlist`, **Auto-Reorder** →
+   `/auto-reorder`, **Family Sharing** → `/family-sharing` (Max owners AND
+   `max_family` members), **Log Out**, then **Terms of Service** → `/tos` and
+   **Privacy Policy** → `/privacy-policy` at the very bottom);
    a hamburger appears ≤768px to toggle
    the sidebar as an animated
-   overlay. Empty state: 🐕 + "What can we get you?" + 3 suggestion chips. Fixed
+   overlay. Empty state: 🐕 + "What can we get you?" + 3 suggestion chips
+   (plus a **"🔥 N week streak" badge** when the order streak is ≥ 2; the badge
+   also shows in the top bar — see "Order Streaks"). Fixed
    bottom input. Sending a message (or chip) fades the empty state, shows the user
    bubble, a typing indicator → (1.5s) "Got it! Let me find the best options for
    you... 🔍" → (2.5s later) 3 keyword-matched product cards (gift / coffee /
-   headphones, default gift). "Buy This 🐕" → progress bar → "✅ Done!".
+   headphones, default gift). Each card has **three** actions: **"Buy This 🐕"**
+   → progress bar → "✅ Done!" (and bumps the order streak); **"♡ Save to
+   Wishlist"** → saves to `/wishlist` + "Added to wishlist!" toast; **"🔁
+   Auto-Reorder"** → opens an inline frequency picker (Weekly / Every 2 weeks /
+   Monthly / Every 2 months / Every 3 months) → saves to `/auto-reorder` +
+   "Auto-reorder set up! Next order: <date>" toast. Toasts use the shared `Toast`
+   component (bottom-right, 3s). See "Order Streaks", "Wishlist", "Auto-Reorder".
 
 ## Google OAuth (Sign up / Log in with Google)
 Both `/signup` and `/login` show a **"Continue with Google"** button
@@ -935,6 +956,59 @@ once via `getOrders()` (RLS-scoped). A two-column grid (`.oa-grid`) that stacks
   design (emoji thumb, name, status pill, retailer · category · date, price +
   FetchIt fee). Empty state: 🛍️ + "No orders yet — start shopping!" + a Start
   Shopping button.
+- A **"🔥 N week streak" badge** sits next to the "Your Spending 🐕" heading
+  (`.oa-streak-badge`), shown only when the streak is ≥ 2 (see "Order Streaks").
+
+## Order Streaks
+Tracks how many **consecutive weeks** (Monday-anchored, local time) a user has
+placed **at least one order**. Stored on the **`profiles`** row as `order_streak`
+(integer, default 0) + `last_order_week` (timestamptz = that week's Monday 00:00
+local). Updated by `updateOrderStreak()` (`utils.js`), called from `saveOrder()`
+after an order lands (best-effort — a failure never blocks the order):
+- already counted an order **this** week → streak unchanged;
+- **first** order this week **and** ordered **last** week too → streak **+ 1**;
+- **missed a week** (or first order ever) → streak **resets to 1**.
+
+`getOrderStreak()` reads the stored value (0 if no profile). The streak is shown
+as a small warm **"🔥 N week streak"** badge **only when ≥ 2** (1 or 0 hides it):
+on the **chat page** (empty-state `.streak-badge` above "What can we get you?"
+AND a smaller `.streak-badge-nav` in the top bar) and on **Orders & Analytics**
+(`.oa-streak-badge`). `ChatPage` refreshes the badge after each "Buy This 🐕".
+
+## Wishlist — `/wishlist` (`WishlistPage.js` / `.css`)
+Products the user saved to buy later. Protected (no session → `/login`); dark
+charcoal shell + top bar (reuses `AccountPage.css`): back arrow → `/chat`, logo,
+"Wishlist" title. Backed by the Supabase **`wishlists`** table `{ id, user_id,
+product_name, product_url, product_image, retailer, price, notes, created_at }`,
+RLS-scoped per user. Loads via `getWishlist()`; each saved product is a card
+(emoji thumb, name, retailer · "Added <date>", notes, price) with a **Remove**
+button (`removeWishlistItem(id)`). Empty state: ♡ + *"No items in your wishlist
+yet. Ask FetchIt to save something for you!"* + a Start Shopping button. Items
+are added from the chat via the **"♡ Save to Wishlist"** button on a product card
+(`addWishlistItem(...)` → "Added to wishlist!" toast). Helpers in `utils.js`:
+`getWishlist()`, `addWishlistItem({ productName, price, productUrl, productImage,
+retailer, notes })`, `removeWishlistItem(id)`.
+
+## Auto-Reorder — `/auto-reorder` (`AutoReorderPage.js` / `.css`)
+Recurring purchase schedules. Protected (no session → `/login`); dark charcoal
+shell + top bar (reuses `AccountPage.css`): back arrow → `/chat`, logo,
+"Auto-Reorder" title. Backed by the Supabase **`auto_reorders`** table `{ id,
+user_id, product_name, product_url, product_image, retailer, price, frequency,
+next_order_date, last_ordered_at, active, created_at }`, RLS-scoped per user.
+`frequency` is one of **weekly · biweekly · monthly · every_2_months ·
+every_3_months** (`FREQUENCY_OPTIONS` in `utils.js`, with the human labels
+Weekly / Every 2 weeks / Monthly / Every 2 months / Every 3 months). Loads via
+`getAutoReorders()`; each is a card (emoji thumb, name, frequency pill + price,
+"Next order: <date>") with a **pause/resume toggle** (`setAutoReorderActive(id,
+active)`; paused cards dim + show "Paused") and a **Delete** button
+(`deleteAutoReorder(id)`). Empty state: 🔁 + *"No auto-reorders set up yet. Ask
+FetchIt to set one up for you!"* + a Start Shopping button. Set up from the chat
+via the **"🔁 Auto-Reorder"** button on a product card, which opens an inline
+frequency picker → `addAutoReorder({ productName, price, frequency, ... })` →
+"Auto-reorder set up! Next order: <date>" toast. `nextOrderDate(frequency, from)`
+computes the next date from the frequency (`frequencyLabel(key)` for display).
+**The actual placing of auto-reorders will happen when Zinc is connected** — for
+now this only stores the schedule and surfaces it in the UI.
 
 ## Pricing Tiers
 Four tiers. Prices are shown per-month; annual plans are billed as the full year
@@ -1163,7 +1237,7 @@ ChatMockup demo is now view-only and no longer triggers the early-access modal.)
 
 ## File Structure
 ```
-supabase/schema.sql           # chats + orders + sessions + weekly_usage + profiles + family_invites/members tables and RLS (run once)
+supabase/schema.sql           # chats + orders + sessions + weekly_usage + profiles (+ order streak) + wishlists + auto_reorders + family_invites/members tables and RLS (run once)
 supabase/functions/create-subscription/index.ts  # Stripe customer + subscription (secret key)
 supabase/functions/cancel-subscription/index.ts  # cancel subscription at period end (secret key)
 supabase/functions/reactivate-subscription/index.ts  # undo a scheduled cancellation (secret key)
@@ -1185,7 +1259,7 @@ src/
     ├── Navbar.js/.css         # sticky nav + hamburger (landing)
     ├── Hero.js/.css           # headline + "See How It Works"
     ├── ChatMockup.js/.css     # landing interactive AI chat demo (auto-play, buy flow)
-    ├── ProductCard.js/.css    # product card (used by chat demo + chat page)
+    ├── ProductCard.js/.css    # product card (chat demo + chat page; Buy / Save to Wishlist / Auto-Reorder)
     ├── HowItWorks.js/.css     # 3 steps
     ├── Features.js/.css       # 4 feature cards
     ├── SocialProof.js/.css    # stats band
@@ -1215,7 +1289,9 @@ src/
     ├── CardsAddressPage.js/.css # /cards-address — reauth wall + address + saved card
     ├── FamilySharingPage.js/.css # /family-sharing — Max owner: 4 invite slots + invite modal
     ├── JoinFamilyPage.js/.css   # /join-family — invite landing (validate / create / login / accept / decline)
-    ├── OrdersAnalytics.js/.css # /orders — spend analytics + scrollable order history
+    ├── OrdersAnalytics.js/.css # /orders — spend analytics + scrollable order history (+ streak badge)
+    ├── WishlistPage.js/.css   # /wishlist — saved products to buy later
+    ├── AutoReorderPage.js/.css # /auto-reorder — recurring purchase schedules (pause/resume/delete)
     └── ChatSidebar.js/.css    # /chat left sidebar — history list + New Chat + Incognito
 ```
 

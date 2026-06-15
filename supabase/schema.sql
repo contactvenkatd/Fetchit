@@ -163,6 +163,11 @@ create table if not exists public.profiles (
   -- Terms of Service acceptance (captured at the /terms onboarding step).
   tos_accepted             boolean not null default false,
   tos_accepted_at          timestamptz,
+  -- Order streak: how many consecutive weeks the user has placed ≥1 order.
+  -- Updated in saveOrder() (src/utils.js); last_order_week is the Monday-00:00
+  -- (local) of the most recent week an order was counted in.
+  order_streak             integer not null default 0,
+  last_order_week          timestamptz,
   created_at               timestamptz not null default now(),
   updated_at               timestamptz not null default now()
 );
@@ -170,6 +175,8 @@ create table if not exists public.profiles (
 -- Bring older installs up to the current shape (safe to run repeatedly).
 alter table public.profiles add column if not exists tos_accepted    boolean not null default false;
 alter table public.profiles add column if not exists tos_accepted_at  timestamptz;
+alter table public.profiles add column if not exists order_streak     integer not null default 0;
+alter table public.profiles add column if not exists last_order_week  timestamptz;
 
 alter table public.profiles enable row level security;
 
@@ -244,10 +251,78 @@ create policy "Owners can manage their own family members"
   with check (auth.uid() = owner_id);
 
 -- ---------------------------------------------------------------------------
+-- wishlists — products the user saved to buy later (the "Save to Wishlist"
+-- button on chat product cards). Backs the /wishlist page. RLS-scoped per user;
+-- user_id defaults to auth.uid() so the client never sends it. price is the
+-- product's display price as a number; product_url is where to buy it later.
+-- ---------------------------------------------------------------------------
+create table if not exists public.wishlists (
+  id            uuid primary key default gen_random_uuid(),
+  user_id       uuid not null references auth.users (id) on delete cascade default auth.uid(),
+  product_name  text not null,
+  product_url   text,
+  product_image text,
+  retailer      text,
+  price         numeric(10, 2),
+  notes         text,
+  created_at    timestamptz not null default now()
+);
+
+create index if not exists wishlists_user_id_created_at_idx
+  on public.wishlists (user_id, created_at desc);
+
+alter table public.wishlists enable row level security;
+
+drop policy if exists "Users can manage their own wishlist" on public.wishlists;
+create policy "Users can manage their own wishlist"
+  on public.wishlists
+  for all
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
+-- auto_reorders — recurring purchase schedules (the "Auto-Reorder" button on
+-- chat product cards). Backs the /auto-reorder page. RLS-scoped per user.
+-- frequency is one of weekly | biweekly | monthly | every_2_months |
+-- every_3_months; next_order_date is when the next order is due (computed
+-- client-side from the frequency). The actual placing of orders will happen
+-- when Zinc is connected — for now this just stores the schedule.
+-- ---------------------------------------------------------------------------
+create table if not exists public.auto_reorders (
+  id              uuid primary key default gen_random_uuid(),
+  user_id         uuid not null references auth.users (id) on delete cascade default auth.uid(),
+  product_name    text not null,
+  product_url     text,
+  product_image   text,
+  retailer        text,
+  price           numeric(10, 2),
+  -- weekly | biweekly | monthly | every_2_months | every_3_months
+  frequency       text not null default 'monthly',
+  next_order_date timestamptz,
+  last_ordered_at timestamptz,
+  active          boolean not null default true,
+  created_at      timestamptz not null default now()
+);
+
+create index if not exists auto_reorders_user_id_created_at_idx
+  on public.auto_reorders (user_id, created_at desc);
+
+alter table public.auto_reorders enable row level security;
+
+drop policy if exists "Users can manage their own auto-reorders" on public.auto_reorders;
+create policy "Users can manage their own auto-reorders"
+  on public.auto_reorders
+  for all
+  to authenticated
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
 -- delete_user() — lets a signed-in user delete their own account from the
 -- client. Removing the auth.users row cascades to their chats, orders,
--- sessions, weekly usage, profile, and family invites/memberships (all
--- reference auth.users on delete cascade). SECURITY
+-- sessions, weekly usage, profile, wishlists, auto-reorders, and family
+-- invites/memberships (all reference auth.users on delete cascade). SECURITY
 -- DEFINER so it runs with the owner's privileges; it only ever targets
 -- auth.uid(), so a user can only delete themselves. Called from the app via
 -- supabase.rpc('delete_user').

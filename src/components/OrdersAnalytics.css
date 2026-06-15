@@ -17,6 +17,29 @@
   margin-bottom: 1.1rem;
 }
 
+/* Heading row carries the 🔥 streak badge alongside "Your Spending". */
+.oa-heading-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.1rem;
+}
+.oa-heading-row .oa-heading {
+  margin-bottom: 0;
+}
+.oa-streak-badge {
+  display: inline-block;
+  background: rgba(255, 107, 53, 0.16);
+  border: 1px solid rgba(255, 107, 53, 0.45);
+  color: #ffb088;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+}
+
 /* ---------- LEFT: spend cards ---------- */
 .spend-cards {
   display: grid;

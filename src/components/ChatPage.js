@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ProductCard from "./ProductCard";
 import ChatSidebar from "./ChatSidebar";
+import Toast from "./Toast";
 import { useAuth } from "../AuthContext";
 import {
   signOut,
@@ -23,10 +24,18 @@ import {
   addWeeklyTokens,
   familyDisbandDue,
   leaveFamily,
+  getOrderStreak,
+  addWishlistItem,
+  addAutoReorder,
   NEXT_PLAN,
 } from "../utils";
 import "./ChatMockup.css"; // reuse bubble / typing / progress / product-scroll styles
 import "./ChatPage.css";
+
+const productUrlFor = (product) => `https://fetchit.app/p/${product.id}`;
+
+const formatShortDate = (d) =>
+  d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
 const prefersReduced = () =>
   typeof window.matchMedia === "function" &&
@@ -69,7 +78,7 @@ const makeId = () =>
     : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const truncate = (s, n) => (s.length > n ? `${s.slice(0, n)}…` : s);
 
-function Message({ m, onBuy, onUpgrade }) {
+function Message({ m, onBuy, onUpgrade, onSaveWishlist, onAutoReorder }) {
   if (m.type === "limit") {
     const weekly = m.scope === "weekly";
     return (
@@ -113,7 +122,13 @@ function Message({ m, onBuy, onUpgrade }) {
           <p className="products-intro">Here are 3 great matches:</p>
           <div className="product-scroll">
             {m.products.map((p) => (
-              <ProductCard key={p.id} product={p} onBuy={onBuy} />
+              <ProductCard
+                key={p.id}
+                product={p}
+                onBuy={onBuy}
+                onSaveWishlist={onSaveWishlist}
+                onAutoReorder={onAutoReorder}
+              />
             ))}
           </div>
         </div>
@@ -170,12 +185,15 @@ function ChatPage() {
   const [currentChatId, setCurrentChatId] = useState(null);
   const [incognito, setIncognito] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [streak, setStreak] = useState(0);
+  const [toast, setToast] = useState({ visible: false, message: "" });
 
   const idRef = useRef(0);
   const timersRef = useRef([]);
   const buyingRef = useRef(false);
   const chatRef = useRef(null);
   const menuRef = useRef(null);
+  const toastTimerRef = useRef(null);
   const currentChatRef = useRef(null); // { id, title, createdAt }
   const sessionRef = useRef(null); // active 5-hour window { id, tokensUsed, sessionStart }
   const weeklyRef = useRef(null); // active weekly window { id, tokensUsed, weekStart }
@@ -209,9 +227,24 @@ function ChatPage() {
     };
   }, [email]);
 
+  // Load the order streak (shown as a "🔥 N week streak" badge when ≥ 2).
+  useEffect(() => {
+    if (!email) return undefined;
+    let active = true;
+    getOrderStreak().then((n) => {
+      if (active) setStreak(n);
+    });
+    return () => {
+      active = false;
+    };
+  }, [email]);
+
   useEffect(() => {
     const timers = timersRef.current;
-    return () => timers.forEach(clearTimeout);
+    return () => {
+      timers.forEach(clearTimeout);
+      clearTimeout(toastTimerRef.current);
+    };
   }, []);
 
   // Prime the user's usage windows — the 5-hour session AND the weekly window
@@ -408,6 +441,16 @@ function ChatPage() {
 
   const handleUpgrade = () => navigate("/plans");
 
+  // Bottom-right toast (reuses the shared Toast component). 3s auto-dismiss.
+  const showToast = (message) => {
+    clearTimeout(toastTimerRef.current);
+    setToast({ visible: true, message });
+    toastTimerRef.current = setTimeout(
+      () => setToast((t) => ({ ...t, visible: false })),
+      3000
+    );
+  };
+
   const handleBuy = (product) => {
     if (buyingRef.current) return;
     buyingRef.current = true;
@@ -415,6 +458,7 @@ function ChatPage() {
     add({ sender: "user", type: "text", text: "Buy This 🐕" });
     add({ sender: "fetchit", type: "text", text: "🛒 Checking out in the background..." });
     if (!reduced) add({ sender: "fetchit", type: "progress" });
+    // saveOrder also bumps the weekly order streak — refresh the badge after.
     saveOrder({
       productName: product.name,
       price: product.price,
@@ -422,12 +466,46 @@ function ChatPage() {
       retailer: "Amazon",
       category: product.category,
       zincOrderId: `zinc_${makeId().replace(/-/g, "").slice(0, 12)}`,
-    });
+    }).then(() => getOrderStreak().then(setStreak));
     schedule(() => {
       removeType("progress");
       add({ sender: "fetchit", type: "text", text: `✅ Done! Your ${product.name} is ordered. Confirmation sent to your email.` });
       buyingRef.current = false;
     }, reduced ? 0 : 2000);
+  };
+
+  // Save a product to the wishlist (explicit action — allowed even in incognito).
+  const handleSaveWishlist = async (product) => {
+    const { error } = await addWishlistItem({
+      productName: product.name,
+      price: product.price,
+      productUrl: productUrlFor(product),
+      productImage: product.emoji,
+      retailer: "Amazon",
+    });
+    showToast(error ? "Couldn't save to wishlist 🐕" : "Added to wishlist!");
+  };
+
+  // Set up an auto-reorder at the chosen frequency.
+  const handleAutoReorder = async (product, frequency) => {
+    const { data, error } = await addAutoReorder({
+      productName: product.name,
+      price: product.price,
+      frequency,
+      productUrl: productUrlFor(product),
+      productImage: product.emoji,
+      retailer: "Amazon",
+    });
+    if (error) {
+      showToast("Couldn't set up auto-reorder 🐕");
+      return;
+    }
+    const when = data.nextOrderDate ? new Date(data.nextOrderDate) : null;
+    showToast(
+      when
+        ? `Auto-reorder set up! Next order: ${formatShortDate(when)}`
+        : "Auto-reorder set up!"
+    );
   };
 
   const resetToEmpty = () => {
@@ -518,6 +596,14 @@ function ChatPage() {
             <a href="/" className="logo">
               <img src="/fetchit-logo.png" alt="FetchIt" className="logo-img" />
             </a>
+            {!incognito && streak >= 2 && (
+              <span
+                className="streak-badge streak-badge-nav"
+                title="Consecutive weeks with an order"
+              >
+                🔥 {streak} week streak
+              </span>
+            )}
             {incognito && <span className="incognito-badge">🕵️ Incognito Mode</span>}
           </div>
 
@@ -546,14 +632,20 @@ function ChatPage() {
                     <button role="menuitem" onClick={() => navigate("/cards-address")}>
                       Cards &amp; Address
                     </button>
+                    <button role="menuitem" onClick={() => navigate("/orders")}>
+                      Orders &amp; Analytics
+                    </button>
+                    <button role="menuitem" onClick={() => navigate("/wishlist")}>
+                      Wishlist
+                    </button>
+                    <button role="menuitem" onClick={() => navigate("/auto-reorder")}>
+                      Auto-Reorder
+                    </button>
                     {showFamilySharing && (
                       <button role="menuitem" onClick={() => navigate("/family-sharing")}>
                         Family Sharing
                       </button>
                     )}
-                    <button role="menuitem" onClick={() => navigate("/orders")}>
-                      Orders &amp; Analytics
-                    </button>
                     <button role="menuitem" onClick={handleLogout}>Log Out</button>
                     <button role="menuitem" onClick={() => navigate("/tos")}>
                       Terms of Service
@@ -577,6 +669,11 @@ function ChatPage() {
         <main className="chat-main">
           {phase !== "chatting" ? (
             <div className={`chat-empty${phase === "leaving" ? " is-leaving" : ""}`}>
+              {streak >= 2 && (
+                <span className="streak-badge" title="Consecutive weeks with an order">
+                  🔥 {streak} week streak
+                </span>
+              )}
               <h1>What can we get you?</h1>
               <p>Describe anything — I&apos;ll find it, compare it, and buy it for you.</p>
               <div className="chat-chips">
@@ -595,6 +692,8 @@ function ChatPage() {
                   m={m}
                   onBuy={handleBuy}
                   onUpgrade={handleUpgrade}
+                  onSaveWishlist={handleSaveWishlist}
+                  onAutoReorder={handleAutoReorder}
                 />
               ))}
             </div>
@@ -626,6 +725,8 @@ function ChatPage() {
           </button>
         </form>
       </div>
+
+      <Toast visible={toast.visible} message={toast.message} />
     </div>
   );
 }

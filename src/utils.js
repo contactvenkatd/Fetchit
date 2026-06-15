@@ -1212,6 +1212,8 @@ const mapProfile = (row) =>
         cardExpYear: row.card_exp_year || null,
         tosAccepted: !!row.tos_accepted,
         tosAcceptedAt: row.tos_accepted_at || null,
+        orderStreak: Number(row.order_streak) || 0,
+        lastOrderWeek: row.last_order_week || null,
       }
     : null;
 
@@ -1249,6 +1251,8 @@ export async function saveProfile(fields) {
     cardExpYear: "card_exp_year",
     tosAccepted: "tos_accepted",
     tosAcceptedAt: "tos_accepted_at",
+    orderStreak: "order_streak",
+    lastOrderWeek: "last_order_week",
   };
   const row = { updated_at: new Date().toISOString() };
   for (const [camel, snake] of Object.entries(map)) {
@@ -1569,7 +1573,45 @@ export async function saveOrder({
   if (error) {
     guardAuthError(error);
     console.error("saveOrder failed:", error.message);
+    return;
   }
+  // Order landed — bump the weekly order streak (best-effort, never blocks).
+  await updateOrderStreak();
+}
+
+// ---------------------------------------------------------------------------
+// Order streak — consecutive weeks (Monday-anchored, local time) with at least
+// one order. Stored on the profiles row (order_streak / last_order_week) and
+// shown as a "🔥 N week streak" badge (only when N ≥ 2) on the chat page and
+// Orders & Analytics. Updated whenever an order is saved.
+// ---------------------------------------------------------------------------
+
+// Recompute the streak for a just-placed order:
+//   • already counted an order this week        → no change
+//   • first order this week, ordered last week   → streak + 1
+//   • missed a week (or first order ever)        → streak resets to 1
+async function updateOrderStreak() {
+  const profile = await getProfile();
+  const thisWeek = new Date(weekStartMs()); // this week's Monday 00:00 local
+  const thisWeekMs = thisWeek.getTime();
+  const lastWeekMs =
+    profile && profile.lastOrderWeek
+      ? new Date(profile.lastOrderWeek).getTime()
+      : null;
+  // An order was already counted this week → streak unchanged.
+  if (lastWeekMs === thisWeekMs) return;
+  // Monday of the previous week (date math keeps it DST-safe).
+  const prevMonday = new Date(thisWeek);
+  prevMonday.setDate(prevMonday.getDate() - 7);
+  const current = profile ? profile.orderStreak || 0 : 0;
+  const next = lastWeekMs === prevMonday.getTime() ? current + 1 : 1;
+  await saveProfile({ orderStreak: next, lastOrderWeek: thisWeek.toISOString() });
+}
+
+// The user's current order streak (0 if none). Reads the profiles row.
+export async function getOrderStreak() {
+  const profile = await getProfile();
+  return profile ? profile.orderStreak || 0 : 0;
 }
 
 const mapOrder = (row) => ({
@@ -1672,4 +1714,194 @@ export function categoryBreakdown(orders, periodKey) {
   return [...totals.entries()]
     .map(([category, total]) => ({ category, total }))
     .sort((a, b) => b.total - a.total);
+}
+
+// ---------------------------------------------------------------------------
+// Wishlist — Supabase "wishlists" table, scoped to the user via RLS. Products
+// saved from the chat ("Save to Wishlist") to buy later; shown on /wishlist.
+// Rows: { id, user_id, product_name, product_url, product_image, retailer,
+//         price, notes, created_at }.
+// ---------------------------------------------------------------------------
+const mapWishlistItem = (row) => ({
+  id: row.id,
+  productName: row.product_name,
+  productUrl: row.product_url,
+  productImage: row.product_image,
+  retailer: row.retailer,
+  price: row.price != null ? Number(row.price) : null,
+  notes: row.notes || "",
+  createdAt: row.created_at,
+});
+
+export async function getWishlist() {
+  const { data, error } = await supabase
+    .from("wishlists")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) {
+    guardAuthError(error);
+    console.error("getWishlist failed:", error.message);
+    return [];
+  }
+  return (data || []).map(mapWishlistItem);
+}
+
+// Save a product to the wishlist. user_id is filled by the table's auth.uid()
+// default. Returns { data } (the new row) or { error }.
+export async function addWishlistItem({
+  productName,
+  price,
+  productUrl = null,
+  productImage = null,
+  retailer = null,
+  notes = null,
+}) {
+  const { data, error } = await supabase
+    .from("wishlists")
+    .insert({
+      product_name: productName,
+      product_url: productUrl,
+      product_image: productImage,
+      retailer,
+      price: parsePrice(price),
+      notes,
+    })
+    .select()
+    .single();
+  if (error) {
+    guardAuthError(error);
+    console.error("addWishlistItem failed:", error.message);
+    return { error: { message: error.message } };
+  }
+  return { data: mapWishlistItem(data) };
+}
+
+export async function removeWishlistItem(id) {
+  const { error } = await supabase.from("wishlists").delete().eq("id", id);
+  if (error) {
+    guardAuthError(error);
+    console.error("removeWishlistItem failed:", error.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Auto-reorder — Supabase "auto_reorders" table, scoped to the user via RLS.
+// Recurring purchase schedules set from the chat ("Auto-Reorder"); shown on
+// /auto-reorder. The actual placing of orders will happen once Zinc is
+// connected — for now we just store the schedule and surface it in the UI.
+// Rows: { id, user_id, product_name, product_url, product_image, retailer,
+//         price, frequency, next_order_date, last_ordered_at, active,
+//         created_at }.
+// ---------------------------------------------------------------------------
+
+// The frequency options offered in the chat picker, in order. `key` is the
+// stored value; `label` is the human label; `days`/`months` drive nextOrderDate.
+export const FREQUENCY_OPTIONS = [
+  { key: "weekly", label: "Weekly", days: 7 },
+  { key: "biweekly", label: "Every 2 weeks", days: 14 },
+  { key: "monthly", label: "Monthly", months: 1 },
+  { key: "every_2_months", label: "Every 2 months", months: 2 },
+  { key: "every_3_months", label: "Every 3 months", months: 3 },
+];
+
+// Human label for a stored frequency key.
+export function frequencyLabel(key) {
+  const opt = FREQUENCY_OPTIONS.find((o) => o.key === key);
+  return opt ? opt.label : key;
+}
+
+// The next order date for a frequency, rolled forward from `from` (default now).
+export function nextOrderDate(frequency, from = new Date()) {
+  const opt = FREQUENCY_OPTIONS.find((o) => o.key === frequency);
+  const d = new Date(from);
+  if (!opt) {
+    d.setMonth(d.getMonth() + 1); // sensible default
+  } else if (opt.days) {
+    d.setDate(d.getDate() + opt.days);
+  } else if (opt.months) {
+    d.setMonth(d.getMonth() + opt.months);
+  }
+  return d;
+}
+
+const mapAutoReorder = (row) => ({
+  id: row.id,
+  productName: row.product_name,
+  productUrl: row.product_url,
+  productImage: row.product_image,
+  retailer: row.retailer,
+  price: row.price != null ? Number(row.price) : null,
+  frequency: row.frequency,
+  nextOrderDate: row.next_order_date,
+  lastOrderedAt: row.last_ordered_at,
+  active: row.active !== false,
+  createdAt: row.created_at,
+});
+
+export async function getAutoReorders() {
+  const { data, error } = await supabase
+    .from("auto_reorders")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) {
+    guardAuthError(error);
+    console.error("getAutoReorders failed:", error.message);
+    return [];
+  }
+  return (data || []).map(mapAutoReorder);
+}
+
+// Set up an auto-reorder. Computes next_order_date from the frequency. Returns
+// { data } (the new row, incl. nextOrderDate) or { error }.
+export async function addAutoReorder({
+  productName,
+  price,
+  frequency,
+  productUrl = null,
+  productImage = null,
+  retailer = null,
+}) {
+  const next = nextOrderDate(frequency);
+  const { data, error } = await supabase
+    .from("auto_reorders")
+    .insert({
+      product_name: productName,
+      product_url: productUrl,
+      product_image: productImage,
+      retailer,
+      price: parsePrice(price),
+      frequency,
+      next_order_date: next.toISOString(),
+      active: true,
+    })
+    .select()
+    .single();
+  if (error) {
+    guardAuthError(error);
+    console.error("addAutoReorder failed:", error.message);
+    return { error: { message: error.message } };
+  }
+  return { data: mapAutoReorder(data) };
+}
+
+// Pause/resume an auto-reorder (toggle `active`).
+export async function setAutoReorderActive(id, active) {
+  const { error } = await supabase
+    .from("auto_reorders")
+    .update({ active })
+    .eq("id", id);
+  if (error) {
+    guardAuthError(error);
+    console.error("setAutoReorderActive failed:", error.message);
+    return { error: { message: error.message } };
+  }
+  return { error: null };
+}
+
+export async function deleteAutoReorder(id) {
+  const { error } = await supabase.from("auto_reorders").delete().eq("id", id);
+  if (error) {
+    guardAuthError(error);
+    console.error("deleteAutoReorder failed:", error.message);
+  }
 }

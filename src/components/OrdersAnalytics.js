@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import {
   getOrders,
+  getOrderStreak,
   spendSummary,
   categoryBreakdown,
   SPEND_PERIODS,
@@ -44,6 +45,7 @@ function OrdersAnalytics() {
   const [orders, setOrders] = useState([]);
   const [fetching, setFetching] = useState(true);
   const [period, setPeriod] = useState("lifetime");
+  const [streak, setStreak] = useState(0);
 
   // Protected route: must be logged in (once the session check resolves).
   useEffect(() => {
@@ -59,6 +61,9 @@ function OrdersAnalytics() {
       if (!active) return;
       setOrders(list);
       setFetching(false);
+    });
+    getOrderStreak().then((n) => {
+      if (active) setStreak(n);
     });
     return () => {
       active = false;
@@ -94,7 +99,17 @@ function OrdersAnalytics() {
         <div className="oa-grid">
           {/* ---------- LEFT: analytics ---------- */}
           <section className="oa-analytics" aria-label="Spending analytics">
-            <h1 className="oa-heading">Your Spending 🐕</h1>
+            <div className="oa-heading-row">
+              <h1 className="oa-heading">Your Spending 🐕</h1>
+              {streak >= 2 && (
+                <span
+                  className="oa-streak-badge"
+                  title="Consecutive weeks with an order"
+                >
+                  🔥 {streak} week streak
+                </span>
+              )}
+            </div>
 
             <div className="spend-cards">
               {SPEND_PERIODS.map((p) => (

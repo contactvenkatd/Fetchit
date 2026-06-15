@@ -209,6 +209,27 @@
   font-weight: 800;
   margin-bottom: 0.5rem;
 }
+
+/* 🔥 N week streak badge — warm pill, shown only when the streak is ≥ 2. */
+.streak-badge {
+  display: inline-block;
+  background: rgba(255, 107, 53, 0.16);
+  border: 1px solid rgba(255, 107, 53, 0.45);
+  color: #ffb088;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+}
+.chat-empty .streak-badge {
+  margin-bottom: 1rem;
+}
+/* Smaller variant for the top bar. */
+.streak-badge-nav {
+  font-size: 0.78rem;
+  padding: 0.28rem 0.7rem;
+}
 .chat-empty p {
   color: rgba(255, 255, 255, 0.7);
   font-weight: 600;

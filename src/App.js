@@ -37,6 +37,8 @@ import CardsAddressPage from "./components/CardsAddressPage";
 import FamilySharingPage from "./components/FamilySharingPage";
 import JoinFamilyPage from "./components/JoinFamilyPage";
 import OrdersAnalytics from "./components/OrdersAnalytics";
+import WishlistPage from "./components/WishlistPage";
+import AutoReorderPage from "./components/AutoReorderPage";
 import AuthCallback from "./components/AuthCallback";
 import { AuthProvider, useAuth } from "./AuthContext";
 import { supabase } from "./supabaseClient";
@@ -515,6 +517,8 @@ function App() {
         <Route path="/family-sharing" element={<FamilySharingPage />} />
         <Route path="/join-family" element={<JoinFamilyPage />} />
         <Route path="/orders" element={<OrdersAnalytics />} />
+        <Route path="/wishlist" element={<WishlistPage />} />
+        <Route path="/auto-reorder" element={<AutoReorderPage />} />
         <Route path="/admin" element={<AdminPage />} />
         <Route
           path="*"

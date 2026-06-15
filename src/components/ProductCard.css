@@ -68,3 +68,72 @@
   background: var(--yellow-deep);
   transform: translateY(-2px);
 }
+
+/* Secondary actions — Save to Wishlist + Auto-Reorder (chat page only). */
+.product-wishlist,
+.product-reorder {
+  margin-top: 0.45rem;
+  width: 100%;
+  border: 1.5px solid rgba(26, 26, 26, 0.16);
+  cursor: pointer;
+  background: var(--white);
+  color: var(--charcoal);
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 0.5rem;
+  border-radius: 12px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.product-wishlist:hover,
+.product-reorder:hover {
+  background: var(--cream);
+  border-color: var(--orange);
+  transform: translateY(-1px);
+}
+
+.product-reorder-wrap {
+  position: relative;
+}
+
+/* Frequency picker popover. */
+.reorder-picker {
+  margin-top: 0.45rem;
+  background: var(--white);
+  border: 1.5px solid #e6e1cf;
+  border-radius: 12px;
+  padding: 0.4rem;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+}
+.reorder-picker-title {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 0.78rem;
+  color: var(--charcoal-soft);
+  padding: 0.25rem 0.4rem 0.4rem;
+}
+.reorder-option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--charcoal);
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  padding: 0.5rem 0.5rem;
+  border-radius: 9px;
+  transition: background 0.12s ease;
+}
+.reorder-option:hover {
+  background: var(--cream);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .product-wishlist:hover,
+  .product-reorder:hover {
+    transform: none;
+  }
+}
