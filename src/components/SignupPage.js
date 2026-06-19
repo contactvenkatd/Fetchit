@@ -5,10 +5,15 @@ import GoogleButton from "./GoogleButton";
 import {
   isValidEmail,
   signUp,
+  sendSignupOtp,
+  verifySignupOtp,
   signInWithGoogle,
   OAUTH_ERROR_KEY,
 } from "../utils";
 import "./SignupPage.css";
+
+const OTP_LEN = 8;
+const RESEND_COOLDOWN = 60; // seconds
 
 function SignupPage() {
   const navigate = useNavigate();
@@ -17,9 +22,18 @@ function SignupPage() {
   const [show, setShow] = useState(false);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [verifySent, setVerifySent] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
   const emailRef = useRef(null);
+
+  // OTP verification sub-state (shown after signUp succeeds).
+  const [otpSent, setOtpSent] = useState(false);
+  const [digits, setDigits] = useState(() => Array(OTP_LEN).fill(""));
+  const [otpError, setOtpError] = useState("");
+  const [verifying, setVerifying] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const boxRefs = useRef([]);
+  // Guards the auto-submit so a correct code is only verified once.
+  const verifyingRef = useRef(false);
 
   useEffect(() => {
     if (emailRef.current) emailRef.current.focus();
@@ -32,6 +46,18 @@ function SignupPage() {
       setErrors({ googleExists: true });
     }
   }, []);
+
+  // Resend cooldown countdown.
+  useEffect(() => {
+    if (cooldown <= 0) return undefined;
+    const id = setInterval(() => setCooldown((c) => (c > 0 ? c - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [cooldown]);
+
+  // Focus the first OTP box when the verification screen appears.
+  useEffect(() => {
+    if (otpSent && boxRefs.current[0]) boxRefs.current[0].focus();
+  }, [otpSent]);
 
   const handleGoogle = async () => {
     setErrors({});
@@ -54,8 +80,8 @@ function SignupPage() {
 
     setSubmitting(true);
     const { data, error } = await signUp(email, password);
-    setSubmitting(false);
     if (error) {
+      setSubmitting(false);
       // Email already has an account → friendly "log in instead" message with a
       // link, rather than Supabase's generic error text.
       const alreadyExists =
@@ -73,33 +99,185 @@ function SignupPage() {
       Array.isArray(data.user.identities) &&
       data.user.identities.length === 0;
     if (obfuscatedExisting) {
+      setSubmitting(false);
       setErrors({ exists: true });
       return;
     }
-    // Email verification on: no session is returned until the user confirms.
-    if (!data.session) {
-      setVerifySent(true);
+    // If a session came back immediately (email confirmation off), skip to plans.
+    if (data.session) {
+      setSubmitting(false);
+      navigate("/plans");
       return;
     }
-    navigate("/plans");
+    // Email verification on: send an 8-digit OTP and show the code-entry screen.
+    const { error: otpError } = await sendSignupOtp(email);
+    setSubmitting(false);
+    if (otpError) {
+      setErrors({ form: otpError.message || "Couldn't send the verification code." });
+      return;
+    }
+    setDigits(Array(OTP_LEN).fill(""));
+    setOtpError("");
+    setCooldown(RESEND_COOLDOWN);
+    setOtpSent(true);
   };
 
-  if (verifySent) {
+  // Verify the entered code. Confirming it establishes a session, so hold
+  // RedirectIfAuthed until we navigate to /terms.
+  const verifyCode = async (codeStr) => {
+    if (verifyingRef.current) return;
+    verifyingRef.current = true;
+    setVerifying(true);
+    setOtpError("");
+    sessionStorage.setItem("fetchit_signup_pending", "1");
+    const { error } = await verifySignupOtp(email, codeStr);
+    if (error) {
+      sessionStorage.removeItem("fetchit_signup_pending");
+      verifyingRef.current = false;
+      setVerifying(false);
+      setDigits(Array(OTP_LEN).fill(""));
+      setOtpError("That code didn't work — check your email and try again.");
+      if (boxRefs.current[0]) boxRefs.current[0].focus();
+      return;
+    }
+    sessionStorage.removeItem("fetchit_signup_pending");
+    navigate("/terms");
+  };
+
+  const handleDigitChange = (idx, raw) => {
+    const val = raw.replace(/\D/g, "");
+    if (otpError) setOtpError("");
+    if (!val) {
+      setDigits((d) => {
+        const nextDigits = [...d];
+        nextDigits[idx] = "";
+        return nextDigits;
+      });
+      return;
+    }
+    setDigits((d) => {
+      const nextDigits = [...d];
+      // Support multi-char input (paste / fast typing) by spilling into boxes.
+      let cursor = idx;
+      for (const ch of val) {
+        if (cursor >= OTP_LEN) break;
+        nextDigits[cursor] = ch;
+        cursor += 1;
+      }
+      const focusAt = Math.min(cursor, OTP_LEN - 1);
+      if (boxRefs.current[focusAt]) boxRefs.current[focusAt].focus();
+      // Auto-submit once every box is filled.
+      if (nextDigits.every((c) => c !== "")) {
+        verifyCode(nextDigits.join(""));
+      }
+      return nextDigits;
+    });
+  };
+
+  const handleDigitKeyDown = (idx, e) => {
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      setDigits((d) => {
+        const nextDigits = [...d];
+        if (nextDigits[idx]) {
+          nextDigits[idx] = "";
+        } else if (idx > 0) {
+          nextDigits[idx - 1] = "";
+          if (boxRefs.current[idx - 1]) boxRefs.current[idx - 1].focus();
+        }
+        return nextDigits;
+      });
+    } else if (e.key === "ArrowLeft" && idx > 0) {
+      boxRefs.current[idx - 1] && boxRefs.current[idx - 1].focus();
+    } else if (e.key === "ArrowRight" && idx < OTP_LEN - 1) {
+      boxRefs.current[idx + 1] && boxRefs.current[idx + 1].focus();
+    }
+  };
+
+  const handleResend = async () => {
+    if (cooldown > 0) return;
+    setOtpError("");
+    const { error } = await sendSignupOtp(email);
+    if (error) {
+      setOtpError(error.message || "Couldn't resend the code.");
+      return;
+    }
+    setDigits(Array(OTP_LEN).fill(""));
+    setCooldown(RESEND_COOLDOWN);
+    if (boxRefs.current[0]) boxRefs.current[0].focus();
+  };
+
+  const handleBackToSignup = () => {
+    setOtpSent(false);
+    setOtpError("");
+    setDigits(Array(OTP_LEN).fill(""));
+    setCooldown(0);
+    verifyingRef.current = false;
+    setVerifying(false);
+  };
+
+  if (otpSent) {
     return (
       <AuthLayout>
         <div className="auth-card">
-          <h1>Check your email 🐕</h1>
-          <p className="auth-sub">
-            We sent a verification link to <strong>{email}</strong>. Click it to
-            verify your account — you&apos;ll be taken straight to choose your
-            plan.
-          </p>
           <button
             type="button"
-            className="btn btn-primary auth-btn"
-            onClick={() => navigate("/login")}
+            className="back-link"
+            onClick={handleBackToSignup}
           >
-            Go to Sign In
+            ← Back
+          </button>
+          <h1>Check Your Email</h1>
+          <p className="auth-sub">
+            We sent an 8-digit code to <strong>{email}</strong>. Enter it below
+            to verify your account.
+          </p>
+
+          <div
+            className="otp-boxes"
+            role="group"
+            aria-label="8-digit verification code"
+          >
+            {digits.map((digit, idx) => (
+              <input
+                key={idx}
+                ref={(el) => {
+                  boxRefs.current[idx] = el;
+                }}
+                className={`otp-box${otpError ? " otp-box-error" : ""}`}
+                type="text"
+                inputMode="numeric"
+                autoComplete={idx === 0 ? "one-time-code" : "off"}
+                maxLength={OTP_LEN}
+                value={digit}
+                disabled={verifying}
+                onChange={(e) => handleDigitChange(idx, e.target.value)}
+                onKeyDown={(e) => handleDigitKeyDown(idx, e)}
+                onFocus={(e) => e.target.select()}
+                aria-label={`Digit ${idx + 1}`}
+                aria-invalid={!!otpError}
+              />
+            ))}
+          </div>
+
+          {verifying && (
+            <p className="otp-status" role="status">
+              Verifying…
+            </p>
+          )}
+          {otpError && (
+            <p className="field-error otp-error-msg" role="alert">
+              {otpError}
+            </p>
+          )}
+
+          <button
+            type="button"
+            className="otp-resend-link"
+            onClick={handleResend}
+            disabled={cooldown > 0}
+          >
+            {cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code"}
           </button>
         </div>
       </AuthLayout>

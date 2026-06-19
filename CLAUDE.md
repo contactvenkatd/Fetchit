@@ -59,9 +59,13 @@ confirmation no longer needs a redirect URL — it uses a reauthentication
 **code**, not a link.)
 
 **Email templates — one purpose each:**
-- **Confirm signup** → signup email verification (`signUp`).
+- **Confirm signup** → signup email verification (`signUp` + `sendSignupOtp`),
+  now an **8-digit OTP code** (not a magic link). Its body must include
+  **`{{ .Token }}`** so the code shows; copy e.g. "Your FetchIt verification code
+  is below 🐕". (`signUp` still passes `emailRedirectTo` = `<origin>/terms` so the
+  link, if clicked, still works as a fallback.)
 - **Reset Password** → password change/reset (`resetPasswordForEmail`).
-- **Magic Link** → **login OTP only** (`signInWithOtp` → 6-digit code, no
+- **Magic Link** → **login OTP only** (`signInWithOtp` → 8-digit code, no
   `emailRedirectTo`). Its body must include **`{{ .Token }}`** so the code shows;
   copy e.g. "Your FetchIt sign-in code is below 🐕".
 - **Account deletion** and all plan emails (purchase/cancel/reactivate/etc.) go
@@ -329,13 +333,21 @@ the browser); per-user access is enforced by Row Level Security, not the client.
   `session.user.email` is the signed-in email, `session.user.user_metadata` holds
   `plan`, `first_name`, `last_name`. Components must wait for `loading` to be
   false before treating "no session" as logged-out.
-- **Email verification** is ON: `signUp()` returns no session until the user
-  clicks the confirmation link (`emailRedirectTo` = `<origin>/terms`).
-  `SignupPage` shows a "Check your email 🐕" screen instead of advancing.
-  Confirming in the same browser auto-signs-in (detected in the URL) → lands on
-  **`/terms`** (the TOS agreement step), which continues to **`/plans`** to pick a
-  plan (`PlansGate` shows it because the new user has no plan yet). Add
-  `<origin>/terms` to the allowed Redirect URLs.
+- **Email verification** is ON and uses an **8-digit OTP code** (not a magic
+  link): `signUp()` returns no session, then `SignupPage` immediately calls
+  `sendSignupOtp(email)` (`signInWithOtp`, `shouldCreateUser: false`) to email the
+  code and swaps to a **"Check Your Email"** OTP screen (8 individual digit boxes,
+  auto-advance, auto-submit when full, "Resend code" with a 60s cooldown, Back
+  button). The code is verified with `verifySignupOtp(email, code)`
+  (`verifyOtp`, `type: 'signup'`) — wrong codes are rejected by Supabase and show
+  an inline error; a correct code confirms the account, establishes the session,
+  and navigates to **`/terms`** (the TOS agreement step → **`/plans`**;
+  `PlansGate` shows it because the new user has no plan yet). A
+  `fetchit_signup_pending` sessionStorage flag holds `RedirectIfAuthed` during the
+  brief window after verification (a session now exists) so `/signup` doesn't
+  bounce to `/chat` before the navigate. `signUp()` still passes `emailRedirectTo`
+  = `<origin>/terms`, so the confirmation link works as a fallback if clicked;
+  keep `<origin>/terms` in the allowed Redirect URLs.
 - **`supabase/schema.sql`** — the `chats`, `orders`, `sessions`, `weekly_usage`,
   `profiles`, `wishlists`, `auto_reorders`, `family_invites`, and `family_members`
   tables + RLS policies, plus the `delete_user()` RPC (SECURITY DEFINER, deletes
@@ -379,6 +391,8 @@ deletion email via send-email) / `verifyDeleteToken(session, token)` /
 `clearDeleteToken()`, `deleteAccount()` (calls the `delete_user()` RPC then
 signs out), plus
 `sendLoginOtp(email)`/`verifyLoginOtp(email, token)` (login email OTP),
+`sendSignupOtp(email)`/`verifySignupOtp(email, token)` (signup email OTP,
+`verifyOtp` `type: 'signup'`),
 the account-termination helpers `checkAccountStatus()`/`enforceAccountStatus()`/
 `guardAuthError(error)` + the re-exported `terminateAccountSession()`/
 `ACCOUNT_TERMINATED_KEY`/`ACCOUNT_TERMINATED_MESSAGE` (see "Instant Account
@@ -432,11 +446,17 @@ Flow:
 1. **Navbar** (landing): "Sign In" → `/login`, "Create Account" → `/signup`.
 2. **Signup** (`/signup`): email + password (show/hide toggle). Validates email
    format + password ≥8 chars → `signUp(email, password)`. Because email
-   verification is on, no session is created yet → shows the "Check your email"
-   screen. The confirmation link (`emailRedirectTo` = `<origin>/terms`) returns
-   the now-signed-in, plan-less user to **`/terms`** (the TOS step → `/plans`).
-   Supabase errors (e.g. user
-   exists) render inline.
+   verification is on, no session is created yet → `SignupPage` calls
+   `sendSignupOtp(email)` and swaps to the **"Check Your Email"** OTP screen:
+   "We sent an 8-digit code to <email>" + **8 individual digit boxes**
+   (auto-advance, paste-aware, auto-submit when all 8 are entered), a **Resend
+   code** link with a **60-second cooldown** ("Resend code in Ns"), and a **Back**
+   button (returns to the signup form). `verifySignupOtp(email, code)`
+   (`verifyOtp`, `type: 'signup'`) verifies it — a wrong code clears the boxes and
+   shows "That code didn't work — check your email and try again."; a correct code
+   confirms the account + establishes the session → **`/terms`** (the TOS step →
+   `/plans`). Supabase errors (e.g. user exists) render inline. (`fetchit_signup_
+   pending` holds `RedirectIfAuthed` across the post-verification window.)
 3. **Login** (`/login`): email + password → `signInWithPassword`; wrong creds →
    "Incorrect email or password", unconfirmed email → "Please verify your email
    before signing in". **A real email OTP second factor gates the sign-in:** on
@@ -1271,7 +1291,7 @@ src/
     ├── Reveal.js              # IntersectionObserver scroll-reveal wrapper
     ├── AdminPage.js/.css      # /admin signups table
     ├── AuthLayout.js/.css     # dark centered shell for auth pages (+ form styles)
-    ├── SignupPage.js          # /signup — email + password (+ Continue with Google)
+    ├── SignupPage.js/.css     # /signup — email + password + 8-digit OTP verify (+ Continue with Google)
     ├── LoginPage.js/.css      # /login — email + password (+ forgot-password, Google)
     ├── GoogleButton.js        # shared "Continue with Google" button (Google G logo)
     ├── AuthCallback.js        # /auth/callback — Google OAuth dispatch (intent + registered)

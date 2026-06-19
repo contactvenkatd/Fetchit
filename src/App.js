@@ -437,11 +437,14 @@ function RedirectIfAuthed({ children }) {
   // While a login is mid-email-confirmation, the password sign-in transiently
   // creates a session before we drop it — don't bounce to /chat in that window.
   const loginPending = sessionStorage.getItem("fetchit_login_pending");
+  // While a signup is mid-OTP-verification, confirming the code establishes a
+  // session before we navigate to /terms — don't bounce to /chat in that window.
+  const signupPending = sessionStorage.getItem("fetchit_signup_pending");
   // A rejected Google OAuth (signup-exists / login-no-account) is signing the
   // just-created session out while routing back to /signup or /login to show the
   // message — don't bounce to /chat before that error renders.
   const oauthError = sessionStorage.getItem("fetchit_oauth_error");
-  if (session && !deletionPending && !loginPending && !oauthError) {
+  if (session && !deletionPending && !loginPending && !signupPending && !oauthError) {
     return <Navigate to="/chat" replace />;
   }
   return children;

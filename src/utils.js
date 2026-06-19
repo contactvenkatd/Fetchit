@@ -318,6 +318,25 @@ export async function verifyLoginOtp(email, token) {
   });
 }
 
+// Signup email verification via OTP (replaces the magic-link flow). After
+// `signUp` creates the unconfirmed account, `sendSignupOtp` emails an 8-digit
+// confirmation code (no user creation — the user already exists), and
+// `verifySignupOtp` validates it with type 'signup'. Wrong codes are rejected by
+// Supabase; a correct code confirms the account and establishes the session.
+export async function sendSignupOtp(email) {
+  return supabase.auth.signInWithOtp({
+    email: email.trim(),
+    options: { shouldCreateUser: false },
+  });
+}
+export async function verifySignupOtp(email, token) {
+  return supabase.auth.verifyOtp({
+    email: email.trim(),
+    token: token.trim(),
+    type: "signup",
+  });
+}
+
 // The current session (or null). Async — reads from Supabase storage.
 export async function getSession() {
   const { data } = await supabase.auth.getSession();

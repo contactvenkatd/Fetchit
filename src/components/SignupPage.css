@@ -16,3 +16,85 @@
 .back-link:hover {
   color: var(--charcoal);
 }
+
+/* 8-box OTP entry — a row of individual digit inputs, centered. */
+.otp-boxes {
+  display: flex;
+  justify-content: center;
+  gap: 0.45rem;
+  margin: 0.4rem 0 1rem;
+}
+.otp-box {
+  width: 100%;
+  max-width: 2.7rem;
+  aspect-ratio: 1 / 1;
+  text-align: center;
+  font-family: "Nunito", sans-serif;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--charcoal);
+  border: 2px solid #e6e1cf;
+  border-radius: 12px;
+  background: var(--cream);
+  outline: none;
+  padding: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.otp-box:focus {
+  border-color: var(--orange);
+  box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.18);
+}
+.otp-box:disabled {
+  color: var(--charcoal-soft);
+  background: #f0ecdf;
+  cursor: not-allowed;
+}
+.otp-box-error {
+  border-color: var(--orange);
+}
+
+/* "Verifying…" status under the boxes. */
+.otp-status {
+  text-align: center;
+  color: var(--charcoal-soft);
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+}
+
+/* Wrong-code error message, centered under the boxes. */
+.otp-error-msg {
+  text-align: center;
+}
+
+/* "Resend code" action with its 60s cooldown. */
+.otp-resend-link {
+  display: block;
+  margin: 1rem auto 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--orange);
+  font-family: "Nunito", sans-serif;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+.otp-resend-link:hover:not(:disabled) {
+  text-decoration: underline;
+}
+.otp-resend-link:disabled {
+  color: var(--charcoal-soft);
+  cursor: not-allowed;
+}
+
+/* Smaller boxes on narrow screens so all 8 fit comfortably. */
+@media (max-width: 420px) {
+  .otp-boxes {
+    gap: 0.3rem;
+  }
+  .otp-box {
+    max-width: 2.2rem;
+    font-size: 1.1rem;
+    border-radius: 10px;
+  }
+}
