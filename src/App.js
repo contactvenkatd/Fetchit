@@ -35,7 +35,7 @@ import ChatPage from "./components/ChatPage";
 import AccountPage from "./components/AccountPage";
 import CardsAddressPage from "./components/CardsAddressPage";
 import FamilySharingPage from "./components/FamilySharingPage";
-import JoinFamilyPage from "./components/JoinFamilyPage";
+import JoinFamilyRedirectPage from "./components/JoinFamilyRedirectPage";
 import OrdersAnalytics from "./components/OrdersAnalytics";
 import WishlistPage from "./components/WishlistPage";
 import AutoReorderPage from "./components/AutoReorderPage";
@@ -518,7 +518,7 @@ function App() {
         <Route path="/account" element={<AccountPage />} />
         <Route path="/cards-address" element={<CardsAddressPage />} />
         <Route path="/family-sharing" element={<FamilySharingPage />} />
-        <Route path="/join-family" element={<JoinFamilyPage />} />
+        <Route path="/join-family" element={<JoinFamilyRedirectPage />} />
         <Route path="/orders" element={<OrdersAnalytics />} />
         <Route path="/wishlist" element={<WishlistPage />} />
         <Route path="/auto-reorder" element={<AutoReorderPage />} />

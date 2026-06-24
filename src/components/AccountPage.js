@@ -233,6 +233,9 @@ function AccountPage() {
   // ----- Current plan (for the "Your Plan" card) -----
   const plan = getPlan(session); // Free | Plus | Pro | Max | max_family
   const familyMember = plan === "max_family"; // on someone else's Max plan
+  // Family Sharing is available to Max owners AND family members. getPlan reads
+  // server-side user_metadata, so this stays correct across refreshes.
+  const showFamilySharing = plan === "Max" || plan === "max_family";
   // A family member has Max-level access but no subscription of their own.
   const isPaid = plan !== "Free" && !familyMember;
   const familyOwner = familyMember ? familyOwnerLabel(session) : null;
@@ -520,6 +523,29 @@ function AccountPage() {
           </section>
 
           <hr className="account-divider" />
+
+          {/* ---------- Family Sharing (Max owners + family members) ---------- */}
+          {showFamilySharing && (
+            <>
+              <section className="account-section">
+                <h2>Family Sharing</h2>
+                <p className="account-section-sub">
+                  {familyMember
+                    ? "View who you share your family plan with."
+                    : "Invite up to 4 people to share your Max plan."}
+                </p>
+                <button
+                  type="button"
+                  className="btn plan-change-btn"
+                  onClick={() => navigate("/family-sharing")}
+                >
+                  Manage Family Sharing
+                </button>
+              </section>
+
+              <hr className="account-divider" />
+            </>
+          )}
 
           {/* ---------- Profile ---------- */}
           <section className="account-section">
