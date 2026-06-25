@@ -118,7 +118,7 @@ function TosPage() {
 
           <h2>8. Ordering Process and Third-Party Fulfillment</h2>
           <p>
-            FetchIt uses third-party ordering APIs including Zinc Technologies to
+            FetchIt will use third-party ordering APIs including Zinc Technologies to
             place orders on your behalf. FetchIt is not the retailer and is not party
             to the contract of sale between you and the retailer. Order cancellations
             and returns are governed by retailer policies. FetchIt&apos;s service fee
@@ -127,11 +127,11 @@ function TosPage() {
 
           <h2>9. Artificial Intelligence and Data Usage</h2>
           <p>
-            The Service uses Grok 4.3 by xAI. Your interactions with the FetchIt AI
+            The Service will use Grok 4.3 by xAI. Your interactions with the FetchIt AI
             assistant, including search queries, product preferences, purchase
             history, and conversation history, may be used by xAI and its affiliates
             to train, improve, and refine their artificial intelligence models. This
-            data sharing is a condition of FetchIt&apos;s use of xAI&apos;s API and
+            data sharing will be a condition of FetchIt&apos;s use of xAI&apos;s API and
             may not be opted out of while using the Service. If you do not consent to
             your data being used for AI model training, you must not use the Service.
           </p>

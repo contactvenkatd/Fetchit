@@ -115,7 +115,7 @@ function PrivacyPolicyPage() {
             <strong>This section requires your careful attention.</strong>
           </p>
           <p>
-            FetchIt uses Grok 4.3, developed and operated by xAI, Inc., to power
+            FetchIt will use Grok 4.3, developed and operated by xAI, Inc., to power
             its shopping assistant.
           </p>
           <p>By using FetchIt, you acknowledge and agree that:</p>
@@ -128,7 +128,7 @@ function PrivacyPolicyPage() {
               their artificial intelligence models.
             </li>
             <li>
-              This data sharing occurs as a condition of FetchIt&apos;s use of
+              This data sharing will occur as a condition of FetchIt&apos;s use of
               xAI&apos;s API services.
             </li>
             <li>
@@ -163,7 +163,7 @@ function PrivacyPolicyPage() {
             <li>xAI — AI inference and model training as described in Section 3</li>
             <li>Resend — transactional email delivery</li>
             <li>
-              Retailers — your shipping address and order details are shared with
+              Retailers — your shipping address and order details will be shared with
               applicable retailers (Amazon, Walmart, etc.) through Zinc to fulfill
               your orders
             </li>
@@ -222,7 +222,7 @@ function PrivacyPolicyPage() {
             </li>
             <li>Marketing emails: unsubscribe via link in any marketing email</li>
             <li>
-              AI training: you cannot opt out of xAI training while using the
+              AI training: you will not be able to opt out of xAI training while using the
               Service
             </li>
           </ul>
