@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import AuthLayout from "./AuthLayout";
 import GoogleButton from "./GoogleButton";
+import Turnstile from "./Turnstile";
 import { supabase } from "../supabaseClient";
 import {
   signIn,
@@ -40,6 +41,7 @@ function LoginPage() {
   const [googleBusy, setGoogleBusy] = useState(false);
   const [noAccount, setNoAccount] = useState(false); // Google login, no account
   const [terminated, setTerminated] = useState(false); // account deleted by admin
+  const [turnstileToken, setTurnstileToken] = useState("");
 
   // Email-confirmation (reauthentication code) sub-state, after a valid password.
   const [otpSent, setOtpSent] = useState(false);
@@ -57,6 +59,7 @@ function LoginPage() {
 
   const emailRef = useRef(null);
   const resetEmailRef = useRef(null);
+  const turnstileRef = useRef(null);
 
   useEffect(() => {
     if (emailRef.current) emailRef.current.focus();
@@ -93,11 +96,23 @@ function LoginPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    // Cloudflare Turnstile token (state, set by the widget's callback). Fall back
+    // to forcing a solve if it hasn't produced one yet.
+    let token = turnstileToken;
+    if (!token && turnstileRef.current) {
+      token = await turnstileRef.current.refresh();
+    }
+    if (!token) {
+      setError("Please complete the bot challenge below.");
+      return;
+    }
+
     setSubmitting(true);
     // signInWithPassword creates a session transiently; hold the /login auto-
     // redirect while we verify the password and sign back out.
     sessionStorage.setItem("fetchit_login_pending", "1");
-    const { error: authError } = await signIn(email, password);
+    const { error: authError } = await signIn(email, password, token);
     if (authError) {
       sessionStorage.removeItem("fetchit_login_pending");
       setSubmitting(false);
@@ -110,9 +125,13 @@ function LoginPage() {
     }
 
     // Password is valid → sign back out (they're not in until the OTP checks
-    // out), then email a real 8-digit code.
+    // out), then email a real 8-digit code. signIn consumed the first Turnstile
+    // token, so mint a fresh one for this second CAPTCHA-protected call.
     await supabase.auth.signOut({ scope: "local" });
-    const { error: otpError } = await sendLoginOtp(email);
+    const otpToken = turnstileRef.current
+      ? await turnstileRef.current.refresh()
+      : "";
+    const { error: otpError } = await sendLoginOtp(email, otpToken);
     sessionStorage.removeItem("fetchit_login_pending"); // no session during entry
     setSubmitting(false);
     if (otpError) {
@@ -179,7 +198,11 @@ function LoginPage() {
     setError("");
     setOtpResent(false);
     setOtpResending(true);
-    const { error: otpError } = await sendLoginOtp(otpEmail || email);
+    // Mint a fresh Turnstile token from the widget on this screen.
+    const token = turnstileRef.current
+      ? await turnstileRef.current.refresh()
+      : "";
+    const { error: otpError } = await sendLoginOtp(otpEmail || email, token);
     setOtpResending(false);
     if (otpError) {
       setError(otpError.message || "Couldn't resend the code.");
@@ -217,8 +240,18 @@ function LoginPage() {
       setResetError("Please enter a valid email");
       return;
     }
+    // Cloudflare Turnstile token from the widget on the reset form (state, with a
+    // forced-solve fallback).
+    let token = turnstileToken;
+    if (!token && turnstileRef.current) {
+      token = await turnstileRef.current.refresh();
+    }
+    if (!token) {
+      setResetError("Please complete the bot challenge below.");
+      return;
+    }
     setResetSending(true);
-    const { error: resetErr } = await sendPasswordReset(resetEmail);
+    const { error: resetErr } = await sendPasswordReset(resetEmail, token);
     setResetSending(false);
     if (resetErr) {
       setResetError(resetErr.message || "Couldn't send the reset link.");
@@ -274,6 +307,7 @@ function LoginPage() {
               {verifying ? "Confirming…" : "Confirm & sign in"}
             </button>
           </form>
+          <Turnstile ref={turnstileRef} onToken={setTurnstileToken} />
           <button
             type="button"
             className="login-resend-link"
@@ -342,6 +376,7 @@ function LoginPage() {
                     </p>
                   )}
                 </div>
+                <Turnstile ref={turnstileRef} onToken={setTurnstileToken} />
                 <button
                   type="submit"
                   className="btn auth-btn login-yellow-btn"
@@ -449,6 +484,8 @@ function LoginPage() {
               {error}
             </p>
           )}
+
+          <Turnstile ref={turnstileRef} onToken={setTurnstileToken} />
 
           <button
             type="submit"

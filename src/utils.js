@@ -26,6 +26,14 @@ export function isValidEmail(value) {
 }
 
 // ---------------------------------------------------------------------------
+// Cloudflare Turnstile (bot protection on the auth forms) is rendered by the
+// reusable <Turnstile> component (src/components/Turnstile.js); the token it
+// produces is passed to Supabase Auth as options.captchaToken on the helpers
+// below and verified server-side when CAPTCHA is enabled (Auth → Settings →
+// Turnstile + secret).
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
 // Early-access / admin signup list (demo only — localStorage, no account).
 // ---------------------------------------------------------------------------
 export function getSignups() {
@@ -61,18 +69,24 @@ export function clearSignups() {
 // Create an account. With email confirmation enabled, the returned data has no
 // session until the user clicks the link in their email. The confirmation link
 // redirects back to the app's origin, where detectSessionInUrl signs them in.
-export async function signUp(email, password) {
+export async function signUp(email, password, captchaToken) {
   return supabase.auth.signUp({
     email: email.trim(),
     password,
     // Confirmation link returns to /terms (the TOS agreement step), which leads
-    // to /plans. detectSessionInUrl signs them in on arrival.
-    options: { emailRedirectTo: `${window.location.origin}/terms` },
+    // to /plans. detectSessionInUrl signs them in on arrival. captchaToken is the
+    // Cloudflare Turnstile token (verified server-side when CAPTCHA is enabled in
+    // Supabase Auth settings; ignored when it's off).
+    options: { emailRedirectTo: `${window.location.origin}/terms`, captchaToken },
   });
 }
 
-export async function signIn(email, password) {
-  return supabase.auth.signInWithPassword({ email: email.trim(), password });
+export async function signIn(email, password, captchaToken) {
+  return supabase.auth.signInWithPassword({
+    email: email.trim(),
+    password,
+    options: { captchaToken },
+  });
 }
 
 export async function signOut() {
@@ -304,10 +318,10 @@ export function consumeReauthResult(purpose) {
 // `verifyLoginOtp` validates it with type 'email' — wrong codes are rejected by
 // Supabase, and a correct code establishes the session. (signInWithOtp uses the
 // Magic Link template; see CLAUDE.md "Email templates".)
-export async function sendLoginOtp(email) {
+export async function sendLoginOtp(email, captchaToken) {
   return supabase.auth.signInWithOtp({
     email: email.trim(),
-    options: { shouldCreateUser: false },
+    options: { shouldCreateUser: false, captchaToken },
   });
 }
 export async function verifyLoginOtp(email, token) {
@@ -323,10 +337,10 @@ export async function verifyLoginOtp(email, token) {
 // confirmation code (no user creation — the user already exists), and
 // `verifySignupOtp` validates it with type 'signup'. Wrong codes are rejected by
 // Supabase; a correct code confirms the account and establishes the session.
-export async function sendSignupOtp(email) {
+export async function sendSignupOtp(email, captchaToken) {
   return supabase.auth.signInWithOtp({
     email: email.trim(),
-    options: { shouldCreateUser: false },
+    options: { shouldCreateUser: false, captchaToken },
   });
 }
 export async function verifySignupOtp(email, token) {
@@ -381,9 +395,10 @@ export async function requestPasswordChange(currentPassword) {
 // Forgot-password: email a reset link that returns to /reset-password. Uses the
 // same "Reset Password" template as the in-app password change; the flows are
 // told apart by the redirectTo path (/reset-password vs /account).
-export async function sendPasswordReset(email) {
+export async function sendPasswordReset(email, captchaToken) {
   const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
     redirectTo: `${window.location.origin}/reset-password`,
+    captchaToken,
   });
   return { error };
 }

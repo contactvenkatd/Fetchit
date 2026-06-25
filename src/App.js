@@ -20,7 +20,6 @@ import Footer from "./components/Footer";
 import Reveal from "./components/Reveal";
 import Toast from "./components/Toast";
 import Modal from "./components/Modal";
-import AdminPage from "./components/AdminPage";
 import SignupPage from "./components/SignupPage";
 import LoginPage from "./components/LoginPage";
 import PlansPage from "./components/PlansPage";
@@ -522,7 +521,6 @@ function App() {
         <Route path="/orders" element={<OrdersAnalytics />} />
         <Route path="/wishlist" element={<WishlistPage />} />
         <Route path="/auto-reorder" element={<AutoReorderPage />} />
-        <Route path="/admin" element={<AdminPage />} />
         <Route
           path="*"
           element={

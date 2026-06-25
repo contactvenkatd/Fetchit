@@ -28,7 +28,7 @@ const PRICING: Record<string, { monthly: number; annual: number; flat?: boolean 
 const USAGE: Record<string, string> = { Plus: "2x", Pro: "5x", Max: "25x" };
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Origin": Deno.env.get("ALLOWED_ORIGIN") ?? "http://localhost:3000",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "POST, OPTIONS",

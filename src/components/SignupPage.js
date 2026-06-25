@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import AuthLayout from "./AuthLayout";
 import GoogleButton from "./GoogleButton";
+import Turnstile from "./Turnstile";
 import {
   isValidEmail,
   signUp,
@@ -23,7 +24,9 @@ function SignupPage() {
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
   const emailRef = useRef(null);
+  const turnstileRef = useRef(null);
 
   // OTP verification sub-state (shown after signUp succeeds).
   const [otpSent, setOtpSent] = useState(false);
@@ -78,8 +81,19 @@ function SignupPage() {
     setErrors(next);
     if (Object.keys(next).length > 0) return;
 
+    // Cloudflare Turnstile token (state, set by the widget's callback). Fall back
+    // to forcing a solve if it hasn't produced one yet.
+    let token = turnstileToken;
+    if (!token && turnstileRef.current) {
+      token = await turnstileRef.current.refresh();
+    }
+    if (!token) {
+      setErrors({ form: "Please complete the bot challenge below." });
+      return;
+    }
+
     setSubmitting(true);
-    const { data, error } = await signUp(email, password);
+    const { data, error } = await signUp(email, password, token);
     if (error) {
       setSubmitting(false);
       // Email already has an account → friendly "log in instead" message with a
@@ -110,7 +124,12 @@ function SignupPage() {
       return;
     }
     // Email verification on: send an 8-digit OTP and show the code-entry screen.
-    const { error: otpError } = await sendSignupOtp(email);
+    // The signUp call above consumed the first Turnstile token, so mint a fresh
+    // one for this second CAPTCHA-protected call.
+    const otpToken = turnstileRef.current
+      ? await turnstileRef.current.refresh()
+      : "";
+    const { error: otpError } = await sendSignupOtp(email, otpToken);
     setSubmitting(false);
     if (otpError) {
       setErrors({ form: otpError.message || "Couldn't send the verification code." });
@@ -197,7 +216,11 @@ function SignupPage() {
   const handleResend = async () => {
     if (cooldown > 0) return;
     setOtpError("");
-    const { error } = await sendSignupOtp(email);
+    // Mint a fresh Turnstile token from the widget on this screen.
+    const token = turnstileRef.current
+      ? await turnstileRef.current.refresh()
+      : "";
+    const { error } = await sendSignupOtp(email, token);
     if (error) {
       setOtpError(error.message || "Couldn't resend the code.");
       return;
@@ -270,6 +293,8 @@ function SignupPage() {
               {otpError}
             </p>
           )}
+
+          <Turnstile ref={turnstileRef} onToken={setTurnstileToken} />
 
           <button
             type="button"
@@ -379,6 +404,8 @@ function SignupPage() {
               {errors.form}
             </p>
           )}
+
+          <Turnstile ref={turnstileRef} onToken={setTurnstileToken} />
 
           <button
             type="submit"
