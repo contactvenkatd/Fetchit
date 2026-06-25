@@ -9,8 +9,7 @@
 import { loadStripe } from "@stripe/stripe-js";
 
 // Stripe test-mode publishable key. Test mode only — no real charges.
-export const STRIPE_PUBLISHABLE_KEY =
-  "pk_test_51Th9ugHqjZ0DYGoFydiFTMk58JXPCXzCcJxpdj0dFWC11vdv4sTiFuE5JPwu74G4jc8wQThpG8f7jL3AtDfVv89A00LkDZYfo2";
+export const STRIPE_PUBLISHABLE_KEY = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY;
 
 // loadStripe returns a promise; create it once at module load so <Elements>
 // always gets the same instance.

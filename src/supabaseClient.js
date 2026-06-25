@@ -3,8 +3,8 @@
 // confirmation link is detected on page load via detectSessionInUrl.
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = "https://fpphpncruohjlppqhfep.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_j_SnlL8-OiV_ha4pWL1lHw_AQCmalXg";
+const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
 // ---------------------------------------------------------------------------
 // Instant account termination (admin-deleted user).
