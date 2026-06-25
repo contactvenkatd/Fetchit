@@ -53,6 +53,11 @@ Deno.serve(async (req) => {
     }
     const user = userData.user;
 
+    // ----- Per-IP rate limit (60 requests / hour) -----
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const { data: okIp } = await admin.rpc("rl_check", { p_bucket: `ip:${ip}`, p_limit: 60, p_window_seconds: 3600 });
+    if (okIp === false) return json({ error: "Too many requests. Try again later." }, 429);
+
     // Body options:
     //   atPeriodEnd          — true (default): set cancel_at_period_end so the
     //                          user keeps access until the period ends (the
